@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>LSHandlerRank</key>
+			<string>Default</string>
+		</dict>
+	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>We use Health data (heart rate and workouts) to show live stats and save your sessions to Apple Health.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>We write your workout and active energy to Apple Health when you choose to sync.</string>
+</dict>
+</plist>
