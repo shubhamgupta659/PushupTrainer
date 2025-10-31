@@ -15,7 +15,8 @@ struct SettingsView: View {
     @State private var avatarSelection: PhotosPickerItem? = nil
 
     var body: some View {
-        Form {
+        NavigationStack {
+            Form {
                 Section("Profile") {
                     NavigationLink(destination: EditProfileView()) {
                         HStack {
@@ -76,9 +77,10 @@ struct SettingsView: View {
                     Label("Reset All Data", systemImage: "trash")
                 }
             }
+            }
+            .navigationTitle("Settings")
+            .onAppear { profile = ProfileStore.load() }
         }
-        .navigationTitle("Settings")
-        .onAppear { profile = ProfileStore.load() }
     }
 
     private func resetAllData() {

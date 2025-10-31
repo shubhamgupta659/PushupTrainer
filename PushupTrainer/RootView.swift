@@ -36,13 +36,19 @@ struct MainTabView: View {
                 .tabItem { Label("Workout", systemImage: "figure.strengthtraining.traditional") }
                 .tag(1)
 
+            NavigationStack {
+                EditPlanView()
+            }
+            .tabItem { Label("Plan", systemImage: "list.bullet.clipboard") }
+            .tag(2)
+
             CalendarView()
                 .tabItem { Label("Activity", systemImage: "calendar") }
-                .tag(2)
+                .tag(3)
 
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(3)
+                .tag(4)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionsUpdated"))) { _ in
             if selectedTab == 1 { selectedTab = 0 }

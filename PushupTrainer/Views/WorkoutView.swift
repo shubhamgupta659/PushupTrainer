@@ -49,7 +49,10 @@ final class WorkoutViewModel: ObservableObject {
         startDate = Date()
         isRunning = true
         haptic.prepare()
-        startTimer()
+        // For manual mode, timer starts on first rep. For other modes, start immediately
+        if mode != .manual {
+            startTimer()
+        }
         tts.speak("Let's crush this workout!")
         #if DEBUG
         print("[Workout] start: target=\(selectedTargetReps ?? -1), mode=\(mode.rawValue)")
@@ -84,6 +87,12 @@ final class WorkoutViewModel: ObservableObject {
         reps += 1
         timestamps.append(Date())
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        
+        // In manual mode, start timer on first rep
+        if mode == .manual && reps == 1 && timer == nil {
+            startTimer()
+        }
+        
         if reps % 10 == 0 { tts.speak("Nice! \(reps) reps!") }
     }
 
@@ -115,6 +124,7 @@ final class WorkoutViewModel: ObservableObject {
     }
 
     func finishWithRecovery(completion: @escaping (WorkoutSession) -> Void) {
+        stop() // Stop the timer and workout first
         guard premiumUnlocked && healthSyncEnabled && health.isHealthDataAvailable, let baseline = currentHeartRateBPM else {
             let session = completeSession()
             markPlanDayComplete()
@@ -145,6 +155,16 @@ final class WorkoutViewModel: ObservableObject {
 
     private func markPlanDayComplete() {
         guard var plan = PlanStore.load() else { return }
+        
+        // Get the target reps for the selected day
+        var targetReps: Int?
+        if let idx = selectedPlanDayIndex, idx >= 0, idx < plan.days.count {
+            targetReps = selectedTargetReps
+        }
+        
+        // Only mark complete if reps >= target
+        guard let target = targetReps, reps >= target else { return }
+        
         if let idx = selectedPlanDayIndex, idx >= 0, idx < plan.days.count {
             plan.days[idx].isCompleted = true
             plan.days[idx].completedDate = Date()
@@ -187,7 +207,7 @@ struct WorkoutView: View {
                 }
                 Spacer()
                 VStack {
-                    Text("Reps")
+                    Text("Total Reps")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(vm.reps)")
@@ -206,25 +226,41 @@ struct WorkoutView: View {
                 .glass(cornerRadius: 12)
             }
 
-            ZStack {
-                // Progress ring based on selected target reps (fallback to profile target)
-                let profile = ProfileStore.load()
-                let target = max(1, vm.selectedTargetReps ?? profile?.targetReps ?? 20)
-                let progress = min(1.0, Double(vm.reps) / Double(target))
-                let hue = 0.0 + (0.33 * progress)
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(Color(hue: hue, saturation: 0.9, brightness: 0.9), style: StrokeStyle(lineWidth: 12, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 320, height: 320)
-                    .animation(.easeInOut, value: vm.reps)
+            if vm.mode == .manual {
+                ZStack {
+                    // Progress ring based on selected target reps (fallback to profile target)
+                    let profile = ProfileStore.load()
+                    let target = max(1, vm.selectedTargetReps ?? profile?.targetReps ?? 20)
+                    let progress = min(1.0, Double(vm.reps) / Double(target))
+                    let hue = 0.0 + (0.33 * progress)
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(Color(hue: hue, saturation: 0.9, brightness: 0.9), style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 360, height: 360)
+                        .animation(.easeInOut, value: vm.reps)
 
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 300, height: 300)
-                    .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
-                    .shadow(radius: 10)
-                    .onTapGesture { vm.incrementRep() }
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 320, height: 320)
+                        .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
+                        .shadow(radius: 10)
+                        .overlay(
+                            VStack(spacing: 4) {
+                                if vm.reps == 0 {
+                                    Text("Tap to Begin")
+                                        .font(.title2.bold())
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("\(vm.reps) / \(target)")
+                                        .font(.system(size: 80, weight: .bold, design: .rounded))
+                                        .contentTransition(.numericText())
+                                }
+                            }
+                        )
+                        .onTapGesture { vm.incrementRep() }
+                }
+                .padding(.top, 60)
             }
 
             // Mode is selected from Settings as user preference
@@ -236,14 +272,8 @@ struct WorkoutView: View {
         .padding(20)
         .onAppear {
             plan = PlanStore.load()
-            if let plan = plan {
-                let daysSinceStart = Calendar.current.dateComponents([.day], from: plan.startDate, to: Date()).day ?? 0
-                let currentDayIndex = min(max(0, daysSinceStart), plan.days.count - 1)
-                if currentDayIndex >= 0 && currentDayIndex < plan.days.count {
-                    vm.showPlanPreview = true
-                } else {
-                    vm.start()
-                }
+            if plan != nil {
+                vm.showPlanPreview = true
             } else {
                 vm.start()
             }
@@ -289,12 +319,15 @@ struct WorkoutView: View {
             Button(action: {
                 guard !vm.isComputingRecovery else { return }
                 vm.finishWithRecovery { session in
-                    if vm.isHealthSavingEnabled { HealthKitService.shared.saveWorkout(session: session) }
-                    var all = SessionStore.load()
-                    all.append(session)
-                    SessionStore.save(all)
-                    // Notify that sessions have been updated
-                    NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)
+                    // Only save session if there are actual reps
+                    if session.reps > 0 {
+                        if vm.isHealthSavingEnabled { HealthKitService.shared.saveWorkout(session: session) }
+                        var all = SessionStore.load()
+                        all.append(session)
+                        SessionStore.save(all)
+                        // Notify that sessions have been updated
+                        NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)
+                    }
                     dismiss()
                 }
             }) {
@@ -370,6 +403,22 @@ struct PlanPreviewSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onCancel) }
                 ToolbarItem(placement: .confirmationAction) { Button("Start Workout") { onStart(selectedIndex, selectedTarget) } }
+            }
+            .onAppear {
+                // Auto-select the first incomplete day after the last completed day
+                if let plan = plan {
+                    var lastCompletedIndex = -1
+                    for (index, day) in plan.days.enumerated() {
+                        if day.isCompleted {
+                            lastCompletedIndex = index
+                        }
+                    }
+                    let nextIndex = lastCompletedIndex + 1
+                    if nextIndex < plan.days.count {
+                        selectedIndex = nextIndex
+                        selectedTarget = plan.days[nextIndex].targetReps
+                    }
+                }
             }
         }
     }

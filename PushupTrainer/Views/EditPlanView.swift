@@ -18,14 +18,28 @@ struct EditPlanView: View {
     @State private var currentMaxText: String = ""
     @State private var totalDaysText: String = ""
     @State private var perDayTargets: [String] = []
-    @State private var planStyle: PlanStyle = .linear
+    @AppStorage("planStyle") private var planStyleRaw: String = PlanStyle.linear.rawValue
     @State private var toastMessage: String? = nil
     @State private var showResetConfirm: Bool = false
+    
+    private var planStyle: PlanStyle {
+        PlanStyle(rawValue: planStyleRaw) ?? .linear
+    }
+    
+    private var planStyleBinding: Binding<PlanStyle> {
+        Binding(
+            get: { PlanStyle(rawValue: planStyleRaw) ?? .linear },
+            set: { planStyleRaw = $0.rawValue }
+        )
+    }
 
     var body: some View {
         formContent
             .navigationTitle("Edit Plan")
-            .onAppear { populateFields() }
+            .onAppear { 
+                plan = PlanStore.load()
+                populateFields() 
+            }
             .alert("Reset plan completion?", isPresented: $showResetConfirm) {
                 Button("Cancel", role: .cancel) {}
                 Button("Reset", role: .destructive) { resetPlanCompletion() }
@@ -54,7 +68,7 @@ struct EditPlanView: View {
                     HStack {
                         Text("Plan Style")
                         Spacer()
-                        Picker("", selection: $planStyle) {
+                        Picker("", selection: planStyleBinding) {
                             ForEach(PlanStyle.allCases) { style in
                                 Text(style.label).tag(style)
                             }
@@ -113,6 +127,20 @@ struct EditPlanView: View {
 
     private func regeneratePlan() {
         guard let tgt = Int(targetRepsText), let cur = Int(currentMaxText), let days = Int(totalDaysText) else { return }
+        
+        // Preserve existing plan metadata if available
+        let oldPlan = plan
+        let preservedStartDate = oldPlan?.startDate ?? Date()
+        let preservedPlanId = oldPlan?.id ?? UUID()
+        
+        // Create a map of old day numbers to completion status
+        var completionMap: [Int: (isCompleted: Bool, completedDate: Date?)] = [:]
+        if let old = oldPlan {
+            for day in old.days {
+                completionMap[day.dayNumber] = (day.isCompleted, day.completedDate)
+            }
+        }
+        
         var daysArray: [PlanDay] = []
         let delta = max(0, tgt - cur)
         
@@ -121,14 +149,16 @@ struct EditPlanView: View {
             for i in 1...max(1, days) {
                 let fraction = Double(i) / Double(max(1, days))
                 let reps = cur + Int(round(Double(delta) * fraction))
-                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: false, completedDate: nil))
+                let preserved = completionMap[i] ?? (isCompleted: false, completedDate: nil)
+                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: preserved.isCompleted, completedDate: preserved.completedDate))
             }
         case .exponential:
             for i in 1...max(1, days) {
                 let t = Double(i) / Double(max(1, days))
                 let eased = pow(t, 1.5) // Slightly slower ramp than t^2
                 let reps = cur + Int(round(Double(delta) * eased))
-                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: false, completedDate: nil))
+                let preserved = completionMap[i] ?? (isCompleted: false, completedDate: nil)
+                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: preserved.isCompleted, completedDate: preserved.completedDate))
             }
         case .stepwise:
             let steps = max(1, min(days / 5, 10))
@@ -136,14 +166,15 @@ struct EditPlanView: View {
             for i in 1...max(1, days) {
                 let stepIndex = Int(floor(Double(i) * Double(steps) / Double(max(1, days))))
                 let reps = cur + Int(round(repsPerStep * Double(stepIndex)))
-                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: false, completedDate: nil))
+                let preserved = completionMap[i] ?? (isCompleted: false, completedDate: nil)
+                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: preserved.isCompleted, completedDate: preserved.completedDate))
             }
         }
         
         // Ensure the last day exactly matches the target reps
         if let last = daysArray.indices.last { daysArray[last].targetReps = tgt }
         
-        let newPlan = WorkoutPlan(id: UUID(), startDate: Date(), totalDays: days, days: daysArray, targetReps: tgt, currentMax: cur)
+        let newPlan = WorkoutPlan(id: preservedPlanId, startDate: preservedStartDate, totalDays: days, days: daysArray, targetReps: tgt, currentMax: cur)
         plan = newPlan
         perDayTargets = newPlan.days.map { String($0.targetReps) }
         savePlan()

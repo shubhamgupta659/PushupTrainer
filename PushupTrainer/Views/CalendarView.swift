@@ -25,7 +25,11 @@ struct CalendarView: View {
                     ForEach(daySessions, id: \.id) { s in
                         HStack {
                             VStack(alignment: .leading) {
-                                Text("Reps: \(s.reps)")
+                                if let target = s.targetRepsAtStart {
+                                    Text("Reps: \(s.reps) / \(target)")
+                                } else {
+                                    Text("Reps: \(s.reps)")
+                                }
                                 Text("Duration: \(s.durationSeconds/60)m \(s.durationSeconds%60)s")
                                     .foregroundStyle(.secondary)
                                     .font(.caption)
@@ -62,11 +66,6 @@ struct CalendarView: View {
             }
         }
         .navigationTitle("Activity")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink(destination: EditPlanView()) { Text("Edit Plan") }
-            }
-        }
         .onAppear { sessions = SessionStore.load() }
         }
     }
