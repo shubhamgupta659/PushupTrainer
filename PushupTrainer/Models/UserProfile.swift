@@ -26,6 +26,7 @@ struct UserProfile: Codable, Identifiable, Equatable {
     var defaultMode: WorkoutMode? // user preference for workout mode
     var createdAt: Date
     var updatedAt: Date
+    var onboardingDate: Date? // Date when user completed onboarding
 }
 
 enum ProfileStore {

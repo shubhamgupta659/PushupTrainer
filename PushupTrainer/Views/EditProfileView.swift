@@ -122,6 +122,7 @@ struct EditProfileView: View {
         }
         .navigationTitle("Edit Profile")
         .navigationBarTitleDisplayMode(.inline)
+        .defaultScrollAnchor(.top)
         .onAppear {
             if let p = profile {
                 heightUnit = p.units.height

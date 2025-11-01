@@ -79,6 +79,7 @@ struct SettingsView: View {
             }
             }
             .navigationTitle("Settings")
+            .defaultScrollAnchor(.top)
             .onAppear { profile = ProfileStore.load() }
         }
     }

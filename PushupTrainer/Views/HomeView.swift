@@ -22,107 +22,108 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            let isLight = shouldUseLightTheme
-            ZStack {
-                // Full-screen gradient background
-                (isLight ? LinearGradient(gradient: Gradient(colors: [Color.white, Color(white: 0.95)]), startPoint: .top, endPoint: .bottom)
-                         : LinearGradient(gradient: Gradient(colors: [Color(red:0.05, green:0.08, blue:0.18), Color(red:0.18, green:0.06, blue:0.20)]), startPoint: .top, endPoint: .bottom))
-                .ignoresSafeArea()
-                .id(themeManager.theme)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Welcome screen for first-time users
-                        if !hasCompletedFirstWorkout {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text(welcomeText())
-                                    .font(.title2.bold())
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text("Let's get started")
-                                    .font(.largeTitle.bold())
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text("Complete your first workout to see your progress here")
-                                    .foregroundStyle(.secondary)
-                                    .font(.body)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.top, 30)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            // Welcome message with username
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Welcome screen for first-time users
+                    if !hasCompletedFirstWorkout {
+                        VStack(alignment: .leading, spacing: 12) {
                             Text(welcomeText())
                                 .font(.title2.bold())
-                                .padding(.vertical, 8)
-                            
-                            // Title and Period Selector
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Summary Stats")
-                            .font(.largeTitle.bold())
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text("Let's get started")
+                                .font(.largeTitle.bold())
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text("Complete your first workout to see your progress here")
+                                .foregroundStyle(.secondary)
+                                .font(.body)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.top, 30)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        // Welcome message with username
+                        Text(welcomeText())
+                            .font(.title2.bold())
+                            .padding(.vertical, 8)
+                        
+                        // Title and Period Selector
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Summary Stats")
+                                .font(.largeTitle.bold())
 
-                                // Period Selector
-                                HStack(spacing: 0) {
-                                    ForEach(TimePeriod.allCases, id: \.self) { period in
-                                        Button(action: { selectedPeriod = period }) {
-                                            Text(period.rawValue)
-                                .font(.headline)
-                                                .foregroundColor(selectedPeriod == period ? .white : .primary)
-                                                .frame(maxWidth: .infinity)
-                                                .padding(.vertical, 10)
-                                                .background(
-                                                    selectedPeriod == period ?
-                                                    AnyShapeStyle(Color.purple.opacity(0.8)) :
-                                                    AnyShapeStyle(Color.clear)
-                                                )
-                                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        }
+                            // Period Selector
+                            HStack(spacing: 0) {
+                                ForEach(TimePeriod.allCases, id: \.self) { period in
+                                    Button(action: { selectedPeriod = period }) {
+                                        Text(period.rawValue)
+                                            .font(.headline)
+                                            .foregroundColor(selectedPeriod == period ? .white : .primary)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                selectedPeriod == period ?
+                                                AnyShapeStyle(Color.purple.opacity(0.8)) :
+                                                AnyShapeStyle(Color.clear)
+                                            )
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
                                     }
                                 }
-                                .padding(4)
-                                .background(Color.gray.opacity(0.2))
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
-                            
-                            // Total Stats
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("TOTAL")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(formattedTotalReps())
-                                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.purple)
-                                Text(periodLabel())
-                                    .font(.caption)
+                            .padding(4)
+                            .background(Color.gray.opacity(0.2))
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                        }
+                        
+                        // Total Stats
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("TOTAL")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(formattedTotalReps())
+                                .font(.system(size: 48, weight: .bold, design: .rounded))
+                                .foregroundStyle(.purple)
+                            Text(periodLabel())
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                            .padding(.vertical, 4)
-                            
-                            // Bar Graph
-                            let barData = getBarGraphData()
-                            if !barData.isEmpty {
-                                BarGraphView(data: barData, maxValue: getMaxValue(from: barData))
-                                    .frame(height: 180)
-                                    .padding(.vertical, 4)
-                            }
-                            
-                            // Weekly Ring Completion
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Weekly Progress")
+                        .padding(.vertical, 4)
+                        
+                        // Bar Graph
+                        let barData = getBarGraphData()
+                        let maxVal = getMaxValue(from: barData)
+                        if !barData.isEmpty {
+                            BarGraphView(data: barData, maxValue: maxVal)
+                                .padding(.vertical, 4)
+                        }
+                        
+                        // Weekly Ring Completion
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Weekly Progress")
                                 .font(.headline)
-                                
-                                WeeklyRingView(plan: plan, selectedDate: nil)
+                            
+                            WeeklyRingView(plan: plan, selectedDate: nil)
                         }
-                            .padding(.vertical, 4)
-                        }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 100) // Extra padding for floating button
                 }
-                
-                // Removed start button on Home as requested
+                .padding(.horizontal, 20)
+                .padding(.bottom, 100) // Extra padding for floating button
             }
+            .defaultScrollAnchor(.top)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .principal) { Text("").font(.headline) } }
-            .background(Color.clear)
+            .background(
+                Group {
+                    if shouldUseLightTheme {
+                        LinearGradient(gradient: Gradient(colors: [Color.white, Color(white: 0.95)]), startPoint: .top, endPoint: .bottom)
+                    } else {
+                        LinearGradient(gradient: Gradient(colors: [Color(red:0.05, green:0.08, blue:0.18), Color(red:0.18, green:0.06, blue:0.20)]), startPoint: .top, endPoint: .bottom)
+                    }
+                }
+                .ignoresSafeArea()
+                .id(themeManager.theme)
+            )
             .onAppear {
                 refreshData()
             }
@@ -228,10 +229,11 @@ struct HomeView: View {
             hourlyReps[hour, default: 0] += session.reps
         }
         
-        // Create data for every 6 hours to keep it manageable
-        return stride(from: 0, to: 24, by: 6).map { hour in
+        // Return all 24 hours but with selective labels (show every 4 hours)
+        return (0..<24).map { hour in
             let reps = hourlyReps[hour] ?? 0
-            let label = formatHourLabel(hour)
+            // Only show labels for 0, 4, 8, 12, 16, 20
+            let label = hour % 4 == 0 ? formatHourLabel(hour) : ""
             return BarData(label: label, value: reps)
         }
     }
@@ -245,61 +247,106 @@ struct HomeView: View {
             dailyReps[dayStart, default: 0] += session.reps
         }
         
-        let allDays = Array(dailyReps.keys).sorted()
-        if allDays.isEmpty {
-            return []
-        }
-        
-        let startDate = allDays.first!
-        let daysSinceStart = calendar.dateComponents([.day], from: startDate, to: Date()).day ?? 0
-        
-        // Limit to last 7 days for weekly, 10 for monthly
-        let displayDays = showDayNames ? min(daysSinceStart + 1, 7) : min(daysSinceStart + 1, 10)
-        
-        var result: [BarData] = []
-        for i in 0..<displayDays {
-            if let date = calendar.date(byAdding: .day, value: i, to: startDate) {
-                let reps = dailyReps[date] ?? 0
-                let label: String
-                if showDayNames {
+        if showDayNames {
+            // Weekly: Show all 7 days of current week
+            guard let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())) else {
+                return []
+            }
+            
+            var result: [BarData] = []
+            for i in 0..<7 {
+                if let date = calendar.date(byAdding: .day, value: i, to: startOfWeek) {
+                    let reps = dailyReps[date] ?? 0
                     let formatter = DateFormatter()
                     formatter.dateFormat = "E" // Single letter day name
-                    label = formatter.string(from: date)
-                } else {
-                    label = "\(calendar.component(.day, from: date))"
+                    let label = formatter.string(from: date)
+                    result.append(BarData(label: label, value: reps))
                 }
-                result.append(BarData(label: label, value: reps))
             }
+            return result
+        } else {
+            // Monthly: Show all days in the current month
+            let now = Date()
+            guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) else {
+                return []
+            }
+            
+            // Get the actual number of days in the month
+            let range = calendar.range(of: .day, in: .month, for: now)
+            let totalDays = range?.count ?? 30
+            
+            // Show all days but only label every 5th day
+            let daysToShow = Array(1...totalDays)
+            
+            var result: [BarData] = []
+            for day in daysToShow {
+                if day <= totalDays, let date = calendar.date(byAdding: .day, value: day - 1, to: startOfMonth) {
+                    let reps = dailyReps[date] ?? 0
+                    // Only show labels for days 1, 5, 10, 15, 20, 25, 30
+                    let label = (day == 1 || day % 5 == 0) ? "\(day)" : ""
+                    result.append(BarData(label: label, value: reps))
+                }
+            }
+            return result
         }
-        
-        return result
     }
     
     private func getMonthlyData(for sessions: [WorkoutSession]) -> [BarData] {
         let calendar = Calendar.current
+        let now = Date()
+        let currentYear = calendar.component(.year, from: now)
+        let currentMonth = calendar.component(.month, from: now)
         var monthlyReps: [Int: Int] = [:]
         
         for session in sessions {
-            let month = calendar.component(.month, from: session.date)
-            monthlyReps[month, default: 0] += session.reps
+            let sessionYear = calendar.component(.year, from: session.date)
+            let sessionMonth = calendar.component(.month, from: session.date)
+            
+            // Only count sessions from current year
+            if sessionYear == currentYear {
+                monthlyReps[sessionMonth, default: 0] += session.reps
+            }
         }
         
         let monthNames = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"]
-        return (1...12).map { month in
+        
+        // Show all months up to current month
+        return (1...currentMonth).map { month in
             BarData(label: monthNames[month - 1], value: monthlyReps[month] ?? 0)
         }
     }
     
     private func formatHourLabel(_ hour: Int) -> String {
-        if hour == 0 { return "12 AM" }
-        if hour < 12 { return "\(hour) AM" }
-        if hour == 12 { return "12 PM" }
-        return "\(hour - 12) PM"
+        // Compact format for 24-hour display
+        if hour == 0 { return "12a" }
+        if hour < 12 { return "\(hour)a" }
+        if hour == 12 { return "12p" }
+        return "\(hour - 12)p"
     }
 
     private func getMaxValue(from data: [BarData]) -> Int {
         let maxValue = data.map { $0.value }.max() ?? 0
-        return max(maxValue, 1) // Minimum of 1 to show some visualization
+        // Round up to nearest nice number
+        if maxValue == 0 { return 10 }
+        if maxValue <= 5 { return 5 }
+        if maxValue <= 10 { return 10 }
+        
+        // For values > 10, round up to next multiple of 10, 20, 50, or 100
+        let magnitude = pow(10.0, floor(log10(Double(maxValue))))
+        let normalized = Double(maxValue) / magnitude
+        
+        var roundedUp: Double
+        if normalized <= 1.0 {
+            roundedUp = 1.0
+        } else if normalized <= 2.0 {
+            roundedUp = 2.0
+        } else if normalized <= 5.0 {
+            roundedUp = 5.0
+        } else {
+            roundedUp = 10.0
+        }
+        
+        return Int(ceil(roundedUp * magnitude))
     }
 }
 
@@ -314,44 +361,134 @@ struct BarGraphView: View {
     let data: [BarData]
     let maxValue: Int
     
+    private let chartHeight: CGFloat = 150
+    private let xAxisHeight: CGFloat = 24
+    private let yAxisWidth: CGFloat = 32
+    private let gridLineCount: Int = 6
+    
     var body: some View {
-        VStack(spacing: 6) {
-            GeometryReader { geometry in
-                let width = geometry.size.width
-                let height = geometry.size.height - 35
+        VStack(spacing: 4) {
+            // Main chart area: Y-axis + Chart
+            HStack(alignment: .bottom, spacing: 4) {
+                // Y-axis labels
+                yAxisLabelsView
+                    .frame(width: yAxisWidth)
                 
-                HStack(alignment: .bottom, spacing: 3) {
-                    ForEach(Array(data.enumerated()), id: \.offset) { index, bar in
-                        VStack(spacing: 0) {
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(Color.purple)
-                                .frame(height: barHeight(for: bar.value, maxHeight: height))
-                            
-                            Spacer(minLength: 0)
-                        }
-                        .frame(width: max(8, (width - CGFloat(data.count - 1) * 3) / CGFloat(data.count)))
-                    }
-                }
+                // Chart container
+                chartContentView
             }
-            .frame(height: 145)
+            .frame(height: chartHeight)
+            .clipped()
             
-            HStack(spacing: 3) {
-                ForEach(Array(data.enumerated()), id: \.offset) { index, bar in
-                    Text(bar.label)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-            }
-            .frame(height: 25)
+            // X-axis labels
+            xAxisLabelsView
+                .frame(height: xAxisHeight)
         }
     }
     
-    private func barHeight(for value: Int, maxHeight: CGFloat) -> CGFloat {
-        guard maxValue > 0, value > 0 else { return 0 }
-        return CGFloat(value) / CGFloat(maxValue) * maxHeight
+    // Y-axis labels aligned with grid
+    private var yAxisLabelsView: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            ForEach(Array(yAxisValues.reversed().enumerated()), id: \.offset) { index, value in
+                Text("\(value)")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .frame(height: index == 0 || index == gridLineCount - 1 ? nil : chartHeight / CGFloat(gridLineCount - 1), alignment: .center)
+                    .padding(.trailing, 4)
+                
+                if index < gridLineCount - 1 {
+                    Spacer(minLength: 0)
+                        .frame(height: chartHeight / CGFloat(gridLineCount - 1))
+                }
+            }
+        }
+        .frame(width: yAxisWidth, height: chartHeight)
+    }
+    
+    // Chart content with grid and bars
+    private var chartContentView: some View {
+        GeometryReader { geometry in
+            let chartWidth = geometry.size.width
+            let barSpacing: CGFloat = 1
+            let totalBars = CGFloat(data.count)
+            let totalSpacing = barSpacing * max(0, totalBars - 1)
+            let barWidth = totalBars > 0 ? max(2, (chartWidth - totalSpacing) / totalBars) : 2
+            
+            ZStack(alignment: .bottomLeading) {
+                // Grid lines
+                ForEach(0..<gridLineCount, id: \.self) { index in
+                    let yPosition = CGFloat(index) * (chartHeight / CGFloat(gridLineCount - 1))
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.1))
+                        .frame(height: 0.5)
+                        .position(x: chartWidth / 2, y: yPosition)
+                }
+                
+                // Bars
+                HStack(alignment: .bottom, spacing: barSpacing) {
+                    ForEach(Array(data.enumerated()), id: \.offset) { _, item in
+                        let height = calculateBarHeight(for: item.value)
+                        Rectangle()
+                            .fill(Color.purple)
+                            .frame(width: barWidth, height: height)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
+            .frame(width: chartWidth, height: chartHeight)
+        }
+    }
+    
+    // X-axis labels
+    private var xAxisLabelsView: some View {
+        HStack(spacing: 0) {
+            Spacer()
+                .frame(width: yAxisWidth + 4)
+            
+            HStack(spacing: 1) {
+                ForEach(Array(data.enumerated()), id: \.offset) { _, item in
+                    Text(item.label)
+                        .font(.system(size: 7))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.4)
+                }
+            }
+            .padding(.leading, 8)
+        }
+    }
+    
+    // Calculate Y-axis values
+    private var yAxisValues: [Int] {
+        var values: [Int] = []
+        let steps = gridLineCount - 1
+        
+        guard maxValue > 0 else {
+            return [0, 1, 2, 3, 4, 5]
+        }
+        
+        let stepSize = max(1, maxValue / steps)
+        
+        for i in 0..<gridLineCount {
+            values.append(min(stepSize * i, maxValue))
+        }
+        
+        // Ensure the last value is exactly maxValue
+        values[gridLineCount - 1] = maxValue
+        
+        return values
+    }
+    
+    // Calculate bar height with safety bounds
+    private func calculateBarHeight(for value: Int) -> CGFloat {
+        guard maxValue > 0 else { return 0 }
+        
+        let ratio = CGFloat(value) / CGFloat(maxValue)
+        let height = ratio * chartHeight
+        
+        // Clamp height to valid range
+        return min(max(0, height), chartHeight)
     }
 }
 
@@ -362,6 +499,7 @@ struct WeeklyRingView: View {
     
     var body: some View {
         let weekDays = getWeekDays()
+        let profile = ProfileStore.load()
         
         HStack(spacing: 8) {
             ForEach(Array(weekDays.enumerated()), id: \.offset) { index, day in
@@ -371,30 +509,22 @@ struct WeeklyRingView: View {
                         .font(.caption2)
                         .foregroundStyle(day.isToday ? .white : .secondary)
                     
-                    // Three rings with total reps
+                    // Single color-coded ring
                     NavigationLink(destination: CalendarView()) {
                         ZStack {
-                            // Background circles
-                            Circle()
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 2.5)
+                            // Ring based on status
+                            let ringColor = getRingColor(for: day, profile: profile)
+                            let ringProgress = day.status == .missed ? 1.0 : day.repsRing
                             
-                            // Outer ring (red) - represents achieving goal
-                            Circle()
-                                .trim(from: 0, to: day.repsRing)
-                                .stroke(day.repsRing >= 1.0 ? Color.red : Color.red.opacity(0.3), lineWidth: 2.5)
-                                .rotationEffect(.degrees(-90))
-                            
-                            // Middle ring (green) - workout completion
-                            Circle()
-                                .trim(from: 0, to: day.completionRing)
-                                .stroke(day.completionRing >= 1.0 ? Color.green : Color.green.opacity(0.3), lineWidth: 2.5)
-                                .rotationEffect(.degrees(-90))
-                            
-                            // Inner ring (blue) - extra achievement
-                            Circle()
-                                .trim(from: 0, to: day.extraRing)
-                                .stroke(day.extraRing >= 1.0 ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2.5)
-                                .rotationEffect(.degrees(-90))
+                            if ringColor != Color.clear {
+                                Circle()
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 3)
+                                
+                                Circle()
+                                    .trim(from: 0, to: ringProgress)
+                                    .stroke(ringColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                                    .rotationEffect(.degrees(-90))
+                            }
                         }
                         .frame(width: 45, height: 45)
                         .overlay(
@@ -402,7 +532,7 @@ struct WeeklyRingView: View {
                                 .strokeBorder(day.isToday ? Color.white : Color.clear, lineWidth: 1.5)
                                 .background(
                                     Circle()
-                                        .fill(day.isToday ? Color.red.opacity(0.5) : Color.clear)
+                                        .fill(day.isToday ? Color.accentColor.opacity(0.3) : Color.clear)
                                 )
                         )
                         .overlay(
@@ -422,6 +552,34 @@ struct WeeklyRingView: View {
         .id(refreshTrigger)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionsUpdated"))) { _ in
             refreshTrigger = UUID()
+        }
+    }
+    
+    private func getRingColor(for day: WeekDayData, profile: UserProfile?) -> Color {
+        // Check if before onboarding
+        let calendar = Calendar.current
+        if let onboardingDate = profile?.onboardingDate {
+            let onboardingStart = calendar.startOfDay(for: onboardingDate)
+            if day.date < onboardingStart {
+                return .clear
+            }
+        }
+        
+        // Check if future date
+        let today = calendar.startOfDay(for: Date())
+        if day.date > today {
+            return .clear
+        }
+        
+        switch day.status {
+        case .missed:
+            return .red
+        case .partial:
+            return .yellow
+        case .complete:
+            return .green
+        case .none:
+            return .clear
         }
     }
 
@@ -450,12 +608,21 @@ struct WeeklyRingView: View {
             }
             
             let daySessions = sessions.filter { $0.date >= dayStart && $0.date < dayEnd }
-            // Prefer the session's captured target, otherwise use plan's day target or global plan target
-            let capturedTarget = daySessions.compactMap { $0.targetRepsAtStart }.last
-            let planDayTarget = plan?.days.first(where: { calendar.isDate($0.completedDate ?? dayDate, inSameDayAs: dayDate) })?.targetReps
-            let fallbackPlanTarget = plan?.targetReps
-            let targetReps = max(1, capturedTarget ?? planDayTarget ?? fallbackPlanTarget ?? 20)
+            
+            // Calculate total reps and total targets for all sessions
             let dayReps = daySessions.reduce(0) { $0 + $1.reps }
+            let totalTargets = daySessions.reduce(0) { $0 + ($1.targetRepsAtStart ?? 0) }
+            
+            // Determine target: use sum of captured targets if available, otherwise use plan
+            let targetReps: Int
+            if totalTargets > 0 {
+                targetReps = totalTargets
+            } else {
+                // Fall back to plan's day target or global plan target
+                let planDayTarget = plan?.days.first(where: { calendar.isDate($0.completedDate ?? dayDate, inSameDayAs: dayDate) })?.targetReps
+                let fallbackPlanTarget = plan?.targetReps
+                targetReps = max(1, planDayTarget ?? fallbackPlanTarget ?? 20)
+            }
             
             // Ring 1: Reps progress (only fill if goal is actually met)
             let ring1 = min(1.0, Double(dayReps) / Double(targetReps))
@@ -469,13 +636,25 @@ struct WeeklyRingView: View {
             // Display total reps in center
             let repsText = dayReps > 0 ? "\(dayReps)" : ""
             
+            // Determine status
+            let status: DayStatus
+            if dayReps == 0 {
+                status = .missed
+            } else if ring1 >= 1.0 {
+                status = .complete
+            } else {
+                status = .partial(progress: ring1)
+            }
+            
             result.append(WeekDayData(
                 dayName: weekDayNames[i],
                 isToday: isToday,
+                date: dayDate,
                 repsRing: ring1,
                 completionRing: ring2,
                 extraRing: ring3,
-                repsText: repsText
+                repsText: repsText,
+                status: status
             ))
         }
         
@@ -492,7 +671,7 @@ struct WeeklyRingView: View {
         return (0..<7).map { i in
             let dayName = weekDayNames[i]
             let isToday = i == adjustedDayOfWeek
-            return WeekDayData(dayName: dayName, isToday: isToday, repsRing: 0.0, completionRing: 0.0, extraRing: 0.0, repsText: "")
+            return WeekDayData(dayName: dayName, isToday: isToday, date: now, repsRing: 0.0, completionRing: 0.0, extraRing: 0.0, repsText: "", status: .none)
     }
 }
 }
@@ -500,8 +679,10 @@ struct WeeklyRingView: View {
 struct WeekDayData {
     let dayName: String
     let isToday: Bool
+    let date: Date
     let repsRing: Double
     let completionRing: Double
     let extraRing: Double
     let repsText: String
+    let status: DayStatus
 }

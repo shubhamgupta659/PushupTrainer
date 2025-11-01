@@ -42,6 +42,7 @@ struct PlanView: View {
             }
         }
         .navigationTitle("Workout Plan")
+        .defaultScrollAnchor(.top)
         .onAppear { plan = PlanStore.load() }
     }
 }

@@ -62,6 +62,9 @@ struct EditPlanView: View {
         Form {
             if let p = plan {
                 Section("Plan Settings") {
+                    // Invisible anchor for scroll reset
+                    Color.clear.frame(height: 0).id("top")
+                    
                     HStack { Text("Target Reps"); Spacer(); TextField("", text: $targetRepsText).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
                     HStack { Text("Current Max"); Spacer(); TextField("", text: $currentMaxText).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
                     HStack { Text("Target Days"); Spacer(); TextField("", text: $totalDaysText).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
@@ -103,6 +106,7 @@ struct EditPlanView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .defaultScrollAnchor(.top)
     }
 
     private func resetPlanCompletion() {

@@ -20,6 +20,7 @@ final class WorkoutViewModel: ObservableObject {
     @Published var selectedPlanDayIndex: Int? = nil
 
     private var timer: Timer?
+    private var autoIncrementTimer: Timer?
     private let haptic = UINotificationFeedbackGenerator()
     private let tts = TTSCoach()
     private let health = HealthKitService.shared
@@ -41,6 +42,11 @@ final class WorkoutViewModel: ObservableObject {
         let profile = ProfileStore.load()
         mode = profile?.defaultMode ?? .manual
     }
+    
+    func reloadMode() {
+        let profile = ProfileStore.load()
+        mode = profile?.defaultMode ?? .manual
+    }
 
     func start() {
         reps = 0
@@ -52,6 +58,10 @@ final class WorkoutViewModel: ObservableObject {
         // For manual mode, timer starts on first rep. For other modes, start immediately
         if mode != .manual {
             startTimer()
+        }
+        // For timer mode, auto-increment reps every 3 seconds
+        if mode == .timer {
+            startAutoIncrementTimer()
         }
         tts.speak("Let's crush this workout!")
         #if DEBUG
@@ -74,11 +84,13 @@ final class WorkoutViewModel: ObservableObject {
     func pause() {
         isRunning = false
         stopTimer()
+        stopAutoIncrementTimer()
     }
 
     func stop() {
         isRunning = false
         stopTimer()
+        stopAutoIncrementTimer()
         health.stopHeartRateStreaming()
     }
 
@@ -186,9 +198,23 @@ final class WorkoutViewModel: ObservableObject {
             guard let self else { return }
             if self.isRunning { self.elapsed += 1 }
         }
+        RunLoop.main.add(timer!, forMode: .common)
     }
 
     private func stopTimer() { timer?.invalidate(); timer = nil }
+    
+    private func startAutoIncrementTimer() {
+        autoIncrementTimer?.invalidate()
+        autoIncrementTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            if self.isRunning {
+                self.incrementRep()
+            }
+        }
+        RunLoop.main.add(autoIncrementTimer!, forMode: .common)
+    }
+    
+    private func stopAutoIncrementTimer() { autoIncrementTimer?.invalidate(); autoIncrementTimer = nil }
 }
 
 struct WorkoutView: View {
@@ -226,42 +252,46 @@ struct WorkoutView: View {
                 .glass(cornerRadius: 12)
             }
 
-            if vm.mode == .manual {
-                ZStack {
-                    // Progress ring based on selected target reps (fallback to profile target)
-                    let profile = ProfileStore.load()
-                    let target = max(1, vm.selectedTargetReps ?? profile?.targetReps ?? 20)
-                    let progress = min(1.0, Double(vm.reps) / Double(target))
-                    let hue = 0.0 + (0.33 * progress)
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(Color(hue: hue, saturation: 0.9, brightness: 0.9), style: StrokeStyle(lineWidth: 16, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 360, height: 360)
-                        .animation(.easeInOut, value: vm.reps)
+            ZStack {
+                // Progress ring based on selected target reps (fallback to profile target)
+                let profile = ProfileStore.load()
+                let target = max(1, vm.selectedTargetReps ?? profile?.targetReps ?? 20)
+                let progress = min(1.0, Double(vm.reps) / Double(target))
+                let hue = 0.0 + (0.33 * progress)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color(hue: hue, saturation: 0.9, brightness: 0.9), style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 360, height: 360)
+                    .animation(.easeInOut, value: vm.reps)
+                    .allowsHitTesting(false)
 
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 320, height: 320)
-                        .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
-                        .shadow(radius: 10)
-                        .overlay(
-                            VStack(spacing: 4) {
-                                if vm.reps == 0 {
-                                    Text("Tap to Begin")
-                                        .font(.title2.bold())
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    Text("\(vm.reps) / \(target)")
-                                        .font(.system(size: 80, weight: .bold, design: .rounded))
-                                        .contentTransition(.numericText())
-                                }
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 320, height: 320)
+                    .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
+                    .shadow(radius: 10)
+                    .overlay(
+                        VStack(spacing: 4) {
+                            if vm.reps == 0 {
+                                Text(vm.mode == .manual ? "Tap to Begin" : "Starting...")
+                                    .font(.title2.bold())
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("\(vm.reps) / \(target)")
+                                    .font(.system(size: 80, weight: .bold, design: .rounded))
+                                    .contentTransition(.numericText())
                             }
-                        )
-                        .onTapGesture { vm.incrementRep() }
-                }
-                .padding(.top, 60)
+                        }
+                    )
+                    .contentShape(Circle())
+                    .onTapGesture {
+                        if vm.mode == .manual {
+                            vm.incrementRep()
+                        }
+                    }
             }
+            .padding(.top, 60)
 
             // Mode is selected from Settings as user preference
 
@@ -271,6 +301,7 @@ struct WorkoutView: View {
         }
         .padding(20)
         .onAppear {
+            vm.reloadMode()
             plan = PlanStore.load()
             if plan != nil {
                 vm.showPlanPreview = true
@@ -295,6 +326,7 @@ struct WorkoutView: View {
                 NotificationCenter.default.post(name: NSNotification.Name("NavigateHome"), object: nil)
                 dismiss()
             })
+            .interactiveDismissDisabled()
         }
         .overlay(alignment: .bottom) {
             if vm.isComputingRecovery {
@@ -398,7 +430,7 @@ struct PlanPreviewSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("Your Plan")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onCancel) }

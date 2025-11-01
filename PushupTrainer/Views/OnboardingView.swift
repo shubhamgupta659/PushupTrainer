@@ -17,6 +17,7 @@ struct OnboardingView: View {
     @State private var targetReps: String = "100"
     @State private var currentMax: String = "10"
     @State private var targetDays: String = "45"
+    @State private var planStyle: PlanStyle = .linear
     @State private var heightUnit: Units.HeightUnit = .cm
     @State private var weightUnit: Units.WeightUnit = .kg
     @State private var avatarSelection: PhotosPickerItem? = nil
@@ -27,116 +28,132 @@ struct OnboardingView: View {
     let onFinish: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Header safely inset from the Dynamic Island / notch
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Welcome to Push-Up Trainer")
-                    .font(.largeTitle.bold())
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
-                Text("Set Up Your Fitness Profile")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 30)
+        ScrollView {
+            VStack(spacing: 16) {
+                // Header safely inset from the Dynamic Island / notch
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Welcome to Push-Up Trainer")
+                        .font(.title.bold())      
+                        .lineLimit(1)          
+                        .minimumScaleFactor(0.5)
+                        .allowsTightening(true) 
+                    Text("Set Up Your Fitness Profile")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 60)
 
-            // Avatar at the top
-            PhotosPicker(selection: $avatarSelection, matching: .images) {
-                HStack {
-                    if let data = avatarData, let ui = UIImage(data: data) {
-                        Image(uiImage: ui).resizable().scaledToFill().frame(width: 52, height: 52).clipShape(Circle())
-                    } else {
-                        Image(systemName: "person.crop.circle.badge.plus").font(.title2)
+                // Avatar at the top
+                PhotosPicker(selection: $avatarSelection, matching: .images) {
+                    HStack {
+                        if let data = avatarData, let ui = UIImage(data: data) {
+                            Image(uiImage: ui).resizable().scaledToFill().frame(width: 52, height: 52).clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.crop.circle.badge.plus").font(.title2)
+                        }
+                        Text("Add Avatar")
+                        Spacer()
                     }
-                    Text("Add Avatar")
-                    Spacer()
+                    .padding().glass(cornerRadius: 14)
                 }
-                .padding().glass(cornerRadius: 14)
+                .onChange(of: avatarSelection, { oldValue, newItem in
+                    guard let newItem else { return }
+                    Task {
+                        if let data = try? await newItem.loadTransferable(type: Data.self) { avatarData = data }
+                    }
+                })
+
+                VStack(spacing: 12) {
+                    HStack { Text("Name"); Spacer(); TextField("", text: $displayName).multilineTextAlignment(.trailing) }
+                        .padding().glass()
+                    HStack {
+                        Text("Gender")
+                        Spacer()
+                        Picker("", selection: $gender) {
+                            Text("Male").tag("Male")
+                            Text("Female").tag("Female")
+                            Text("Other").tag("Other")
+                            Text("Prefer not to say").tag("Prefer not to say")
+                        }.pickerStyle(.menu)
+                    }
+                        .padding().glass()
+                    HStack {
+                        Text("Age")
+                        Spacer()
+                        Picker("", selection: $ageValue) {
+                            ForEach(13...80, id: \.self) { age in Text("\(age)").tag(age) }
+                        }.pickerStyle(.menu)
+                    }
+                        .padding().glass()
+
+                    HStack {
+                        Text("Height")
+                        Spacer()
+                        TextField("", text: $height).keyboardType(.decimalPad).frame(width: 80).multilineTextAlignment(.trailing)
+                        Picker("", selection: $heightUnit) {
+                            Text("cm").tag(Units.HeightUnit.cm)
+                            Text("ft").tag(Units.HeightUnit.ft)
+                        }.pickerStyle(.segmented).frame(width: 120)
+                    }.padding().glass()
+
+                    HStack {
+                        Text("Weight")
+                        Spacer()
+                        TextField("", text: $weight).keyboardType(.decimalPad).frame(width: 80).multilineTextAlignment(.trailing)
+                        Picker("", selection: $weightUnit) {
+                            Text("kg").tag(Units.WeightUnit.kg)
+                            Text("lb").tag(Units.WeightUnit.lb)
+                        }.pickerStyle(.segmented).frame(width: 120)
+                    }.padding().glass()
+
+                    HStack { Text("Target Reps"); Spacer(); TextField("", text: $targetReps).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
+                        .padding().glass()
+
+                    HStack { Text("Current Max"); Spacer(); TextField("", text: $currentMax).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
+                        .padding().glass()
+
+                    HStack { Text("Target Days"); Spacer(); TextField("", text: $targetDays).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
+                        .padding().glass()
+                    
+                    HStack {
+                        Text("Plan Style")
+                        Spacer()
+                        Picker("", selection: $planStyle) {
+                            ForEach(PlanStyle.allCases) { style in
+                                Text(style.label).tag(style)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    .padding().glass()
+                }
+
+                // Policy / Agreement
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(action: { showPolicy = true }) {
+                        Text("Privacy Policy & Terms")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.9)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Toggle(isOn: $agreePolicy) { Text("I agree to the Privacy Policy and User Agreement").lineLimit(1).minimumScaleFactor(0.8) }
+                }
+                .padding(.top, 8)
+
+                Button(action: save) {
+                    Text("Continue")
+                        .font(.headline).padding().frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.top, 4)
+                .disabled(!isFormValid())
+
+                // Add bottom padding for better scrolling experience
+                Color.clear.frame(height: 40)
             }
-            .onChange(of: avatarSelection, { oldValue, newItem in
-                guard let newItem else { return }
-                Task {
-                    if let data = try? await newItem.loadTransferable(type: Data.self) { avatarData = data }
-                }
-            })
-
-            VStack(spacing: 12) {
-                HStack { Text("Name"); Spacer(); TextField("", text: $displayName).multilineTextAlignment(.trailing) }
-                    .padding().glass()
-                HStack {
-                    Text("Gender")
-                    Spacer()
-                    Picker("", selection: $gender) {
-                        Text("Male").tag("Male")
-                        Text("Female").tag("Female")
-                        Text("Other").tag("Other")
-                        Text("Prefer not to say").tag("Prefer not to say")
-                    }.pickerStyle(.menu)
-                }
-                    .padding().glass()
-                HStack {
-                    Text("Age")
-                    Spacer()
-                    Picker("", selection: $ageValue) {
-                        ForEach(13...80, id: \.self) { age in Text("\(age)").tag(age) }
-                    }.pickerStyle(.menu)
-                }
-                    .padding().glass()
-
-                HStack {
-                    Text("Height")
-                    Spacer()
-                    TextField("", text: $height).keyboardType(.decimalPad).frame(width: 80).multilineTextAlignment(.trailing)
-                    Picker("", selection: $heightUnit) {
-                        Text("cm").tag(Units.HeightUnit.cm)
-                        Text("ft").tag(Units.HeightUnit.ft)
-                    }.pickerStyle(.segmented).frame(width: 120)
-                }.padding().glass()
-
-                HStack {
-                    Text("Weight")
-                    Spacer()
-                    TextField("", text: $weight).keyboardType(.decimalPad).frame(width: 80).multilineTextAlignment(.trailing)
-                    Picker("", selection: $weightUnit) {
-                        Text("kg").tag(Units.WeightUnit.kg)
-                        Text("lb").tag(Units.WeightUnit.lb)
-                    }.pickerStyle(.segmented).frame(width: 120)
-                }.padding().glass()
-
-                HStack { Text("Target Reps"); Spacer(); TextField("", text: $targetReps).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
-                    .padding().glass()
-
-                HStack { Text("Current Max"); Spacer(); TextField("", text: $currentMax).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
-                    .padding().glass()
-
-                HStack { Text("Target Days"); Spacer(); TextField("", text: $targetDays).keyboardType(.numberPad).multilineTextAlignment(.trailing) }
-                    .padding().glass()
-            }
-
-            // Policy / Agreement
-            VStack(alignment: .leading, spacing: 8) {
-                Button(action: { showPolicy = true }) {
-                    Text("Privacy Policy & Terms")
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Toggle(isOn: $agreePolicy) { Text("I agree to the Privacy Policy and User Agreement").lineLimit(1).minimumScaleFactor(0.8) }
-            }
-            .padding(.top, 8)
-
-            Button(action: save) {
-                Text("Continue")
-                    .font(.headline).padding().frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .padding(.top, 4)
-            .disabled(!isFormValid())
-
-            Spacer()
+            .padding(20)
         }
-        .padding(20)
         .background(
             Group {
                 if shouldUseLightTheme {
@@ -189,6 +206,7 @@ struct OnboardingView: View {
     }
 
     private func save() {
+        let now = Date()
         let profile = UserProfile(
             id: UUID(),
             displayName: displayName.isEmpty ? nil : displayName,
@@ -201,34 +219,49 @@ struct OnboardingView: View {
             units: Units(height: heightUnit, weight: weightUnit),
             avatarImageData: avatarData,
             defaultMode: .manual,
-            createdAt: Date(),
-            updatedAt: Date()
+            createdAt: now,
+            updatedAt: now,
+            onboardingDate: now
         )
         ProfileStore.save(profile)
         
-        // Generate initial workout plan
-        let heightM = normalizedHeightCm() / 100.0
-        let weight = normalizedWeightKg()
-        let bmi = weight > 0 && heightM > 0 ? weight / (heightM * heightM) : 22.0
-        var plan = PlanGenerator.generate(
-            targetReps: Int(targetReps) ?? 20,
-            currentMax: Int(currentMax) ?? 10,
-            age: ageValue,
-            bmi: bmi
-        )
-        // Override total days based on user input
-        if let days = Int(targetDays), days != plan.totalDays {
-            if days < plan.days.count { plan.days = Array(plan.days.prefix(days)) }
-            if days > plan.days.count {
-                let lastNum = plan.days.last?.dayNumber ?? 0
-                let tgt = Int(targetReps) ?? plan.targetReps
-                for i in 1...max(0, days - plan.days.count) {
-                    plan.days.append(PlanDay(id: UUID(), dayNumber: lastNum + i, targetReps: tgt, isCompleted: false, completedDate: nil))
-                }
+        // Generate initial workout plan based on selected style
+        guard let tgt = Int(targetReps), let cur = Int(currentMax), let days = Int(targetDays) else { return }
+        var daysArray: [PlanDay] = []
+        let delta = max(0, tgt - cur)
+        
+        switch planStyle {
+        case .linear:
+            for i in 1...max(1, days) {
+                let fraction = Double(i) / Double(max(1, days))
+                let reps = cur + Int(round(Double(delta) * fraction))
+                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: false, completedDate: nil))
             }
-            plan.totalDays = days
+        case .exponential:
+            for i in 1...max(1, days) {
+                let t = Double(i) / Double(max(1, days))
+                let eased = pow(t, 1.5) // Slightly slower ramp than t^2
+                let reps = cur + Int(round(Double(delta) * eased))
+                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: false, completedDate: nil))
+            }
+        case .stepwise:
+            let steps = max(1, min(days / 5, 10))
+            let repsPerStep = Double(delta) / Double(steps)
+            for i in 1...max(1, days) {
+                let stepIndex = Int(floor(Double(i) * Double(steps) / Double(max(1, days))))
+                let reps = cur + Int(round(repsPerStep * Double(stepIndex)))
+                daysArray.append(PlanDay(id: UUID(), dayNumber: i, targetReps: min(max(cur, reps), tgt), isCompleted: false, completedDate: nil))
+            }
         }
+        
+        // Ensure the last day exactly matches the target reps
+        if let last = daysArray.indices.last { daysArray[last].targetReps = tgt }
+        
+        let plan = WorkoutPlan(id: UUID(), startDate: Date(), totalDays: days, days: daysArray, targetReps: tgt, currentMax: cur)
         PlanStore.save(plan)
+        
+        // Save plan style preference
+        UserDefaults.standard.set(planStyle.rawValue, forKey: "planStyle")
         
         onFinish()
     }
