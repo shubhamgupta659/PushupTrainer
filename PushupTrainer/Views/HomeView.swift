@@ -47,42 +47,42 @@ struct HomeView: View {
                             .font(.title2.bold())
                             .padding(.vertical, 8)
                         
-                        // Title and Period Selector
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Summary Stats")
-                                .font(.largeTitle.bold())
-
-                            // Period Selector
-                            HStack(spacing: 0) {
-                                ForEach(TimePeriod.allCases, id: \.self) { period in
-                                    Button(action: { selectedPeriod = period }) {
-                                        Text(period.rawValue)
-                                            .font(.headline)
-                                            .foregroundColor(selectedPeriod == period ? .white : .primary)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                selectedPeriod == period ?
-                                                AnyShapeStyle(Color.purple.opacity(0.8)) :
-                                                AnyShapeStyle(Color.clear)
-                                            )
-                                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    }
+                        // Title
+                        Text("Activity Overview")
+                            .font(.largeTitle.bold())
+                            .padding(.bottom, 4)
+                        
+                        // Period Selector
+                        HStack(spacing: 0) {
+                            ForEach(TimePeriod.allCases, id: \.self) { period in
+                                Button(action: { selectedPeriod = period }) {
+                                    Text(period.rawValue)
+                                        .font(.headline)
+                                        .foregroundColor(selectedPeriod == period ? .white : .primary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            selectedPeriod == period ?
+                                            AnyShapeStyle(themeManager.accentColor.color.opacity(0.8)) :
+                                            AnyShapeStyle(Color.clear)
+                                        )
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
                                 }
                             }
-                            .padding(4)
-                            .background(Color.gray.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
                         }
+                        .padding(4)
+                        .background(Color.gray.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.bottom, 8)
                         
                         // Total Stats
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("TOTAL")
-                                .font(.caption)
+                            Text("TOTAL REPS")
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             Text(formattedTotalReps())
                                 .font(.system(size: 48, weight: .bold, design: .rounded))
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(themeManager.accentColor.color)
                             Text(periodLabel())
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -93,16 +93,29 @@ struct HomeView: View {
                         let barData = getBarGraphData()
                         let maxVal = getMaxValue(from: barData)
                         if !barData.isEmpty {
-                            BarGraphView(data: barData, maxValue: maxVal)
-                                .padding(.vertical, 4)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Breakdown")
+                                    .font(.headline)
+                                BarGraphView(data: barData, maxValue: maxVal)
+                            }
+                            .padding(.vertical, 4)
                         }
                         
                         // Weekly Ring Completion
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Weekly Progress")
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("This Week")
                                 .font(.headline)
                             
                             WeeklyRingView(plan: plan, selectedDate: nil)
+                        }
+                        .padding(.vertical, 4)
+                        
+                        // Weekly Calories Chart
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Calories Burned")
+                                .font(.headline)
+                            
+                            WeeklyCaloriesChart(sessions: sessions)
                         }
                         .padding(.vertical, 4)
                     }
@@ -114,30 +127,19 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .principal) { Text("").font(.headline) } }
             .background(
-                Group {
-                    if shouldUseLightTheme {
-                        LinearGradient(gradient: Gradient(colors: [Color.white, Color(white: 0.95)]), startPoint: .top, endPoint: .bottom)
-                    } else {
-                        LinearGradient(gradient: Gradient(colors: [Color(red:0.05, green:0.08, blue:0.18), Color(red:0.18, green:0.06, blue:0.20)]), startPoint: .top, endPoint: .bottom)
-                    }
-                }
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
                 .ignoresSafeArea()
-                .id(themeManager.theme)
             )
             .onAppear {
                 refreshData()
             }
-        }
-    }
-    
-    private var shouldUseLightTheme: Bool {
-        switch themeManager.theme {
-        case .light:
-            return true
-        case .dark:
-            return false
-        case .system:
-            return (UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.windows.first }.first?.traitCollection.userInterfaceStyle == .light)
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionsUpdated"))) { _ in
+                refreshData()
+            }
         }
     }
     
@@ -147,9 +149,24 @@ struct HomeView: View {
     }
     
     private func refreshData() {
-        hasCompletedFirstWorkout = !sessions.isEmpty
+        profile = ProfileStore.load()
         sessions = SessionStore.load()
         plan = PlanStore.load()
+        
+        #if DEBUG
+        print("[HomeView] Refreshed data: \(sessions.count) sessions, plan exists: \(plan != nil)")
+        if !sessions.isEmpty {
+            let calendar = Calendar.current
+            let today = calendar.startOfDay(for: Date())
+            let todaySessions = sessions.filter { calendar.startOfDay(for: $0.date) == today }
+            print("[HomeView] Today's sessions: \(todaySessions.count)")
+            for session in todaySessions {
+                print("  - Session: \(session.reps) reps at \(session.date)")
+            }
+        }
+        #endif
+        
+        hasCompletedFirstWorkout = !sessions.isEmpty
         if !hasCompletedFirstWorkout && !sessions.isEmpty {
             hasCompletedFirstWorkout = true
         }
@@ -186,7 +203,10 @@ struct HomeView: View {
             return sessions.filter { $0.date >= startOfDay }
             
         case .week:
-            guard let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) else {
+            // Start week on Sunday
+            var comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
+            comps.weekday = 1 // Sunday
+            guard let startOfWeek = calendar.date(from: comps) else {
                 return []
             }
             return sessions.filter { $0.date >= startOfWeek }
@@ -238,18 +258,68 @@ struct HomeView: View {
         }
     }
 
+    private func getColorForDay(date: Date, reps: Int, totalTargets: Int, sessionsCount: Int, useAccentColor: Bool = false) -> Color {
+        let calendar = Calendar.current
+        let profile = ProfileStore.load()
+        let todayStart = calendar.startOfDay(for: Date())
+        let dayStart = calendar.startOfDay(for: date)
+        
+        // Check if before onboarding
+        if let onboardingDate = profile?.onboardingDate {
+            let onboardingStart = calendar.startOfDay(for: onboardingDate)
+            if dayStart < onboardingStart {
+                return Color.gray.opacity(0.3)
+            }
+        }
+        
+        // Check if future date
+        if dayStart > todayStart {
+            return Color.gray.opacity(0.3)
+        }
+        
+        // If no reps, show as missed (red) or gray
+        if reps == 0 {
+            return .red
+        }
+        
+        // If using accent color mode (for weekly bars), just use accent color
+        if useAccentColor {
+            return themeManager.accentColor.color
+        }
+        
+        // Otherwise, use status colors (for weekly rings)
+        let targetReps: Int
+        if totalTargets > 0 {
+            targetReps = totalTargets
+        } else {
+            targetReps = max(1, plan?.targetReps ?? 20)
+        }
+        
+        if Double(reps) >= Double(targetReps) {
+            return .green // Complete
+        } else {
+            return .yellow // Partial
+        }
+    }
+    
     private func getDailyData(for sessions: [WorkoutSession], showDayNames: Bool) -> [BarData] {
         let calendar = Calendar.current
         var dailyReps: [Date: Int] = [:]
+        var dailyTargets: [Date: Int] = [:]
+        var dailySessionCounts: [Date: Int] = [:]
         
         for session in sessions {
             let dayStart = calendar.startOfDay(for: session.date)
             dailyReps[dayStart, default: 0] += session.reps
+            dailyTargets[dayStart, default: 0] += session.targetRepsAtStart ?? 0
+            dailySessionCounts[dayStart, default: 0] += 1
         }
         
         if showDayNames {
-            // Weekly: Show all 7 days of current week
-            guard let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())) else {
+            // Weekly: Show all 7 days of current week (starting Sunday)
+            var comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+            comps.weekday = 1 // Sunday
+            guard let startOfWeek = calendar.date(from: comps) else {
                 return []
             }
             
@@ -257,10 +327,14 @@ struct HomeView: View {
             for i in 0..<7 {
                 if let date = calendar.date(byAdding: .day, value: i, to: startOfWeek) {
                     let reps = dailyReps[date] ?? 0
+                    let targets = dailyTargets[date] ?? 0
+                    let sessionCount = dailySessionCounts[date] ?? 0
+                    // Use accent color for weekly bars
+                    let color = getColorForDay(date: date, reps: reps, totalTargets: targets, sessionsCount: sessionCount, useAccentColor: true)
                     let formatter = DateFormatter()
-                    formatter.dateFormat = "E" // Single letter day name
+                    formatter.dateFormat = "EEEEE" // Single letter day name (S, M, T, W, T, F, S)
                     let label = formatter.string(from: date)
-                    result.append(BarData(label: label, value: reps))
+                    result.append(BarData(label: label, value: reps, color: color))
                 }
             }
             return result
@@ -355,16 +429,24 @@ struct HomeView: View {
 struct BarData {
     let label: String
     let value: Int
+    let color: Color?
+    
+    init(label: String, value: Int, color: Color? = nil) {
+        self.label = label
+        self.value = value
+        self.color = color
+    }
 }
 
 struct BarGraphView: View {
     let data: [BarData]
     let maxValue: Int
+    @EnvironmentObject var themeManager: ThemeManager
     
     private let chartHeight: CGFloat = 150
     private let xAxisHeight: CGFloat = 24
     private let yAxisWidth: CGFloat = 32
-    private let gridLineCount: Int = 6
+    private let gridLineCount: Int = 4
     
     var body: some View {
         VStack(spacing: 4) {
@@ -384,6 +466,9 @@ struct BarGraphView: View {
             xAxisLabelsView
                 .frame(height: xAxisHeight)
         }
+        .padding(12)
+        .background(Color.gray.opacity(0.2))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
     
     // Y-axis labels aligned with grid
@@ -393,12 +478,10 @@ struct BarGraphView: View {
                 Text("\(value)")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
-                    .frame(height: index == 0 || index == gridLineCount - 1 ? nil : chartHeight / CGFloat(gridLineCount - 1), alignment: .center)
                     .padding(.trailing, 4)
                 
                 if index < gridLineCount - 1 {
-                    Spacer(minLength: 0)
-                        .frame(height: chartHeight / CGFloat(gridLineCount - 1))
+                    Spacer()
                 }
             }
         }
@@ -429,8 +512,9 @@ struct BarGraphView: View {
                     ForEach(Array(data.enumerated()), id: \.offset) { _, item in
                         let height = calculateBarHeight(for: item.value)
                         Rectangle()
-                            .fill(Color.purple)
+                            .fill(item.color ?? themeManager.accentColor.color)
                             .frame(width: barWidth, height: height)
+                            .cornerRadius(2)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -459,23 +543,25 @@ struct BarGraphView: View {
         }
     }
     
-    // Calculate Y-axis values
+    // Calculate Y-axis values (always 4 values including zero)
     private var yAxisValues: [Int] {
-        var values: [Int] = []
-        let steps = gridLineCount - 1
-        
         guard maxValue > 0 else {
-            return [0, 1, 2, 3, 4, 5]
+            return [0, 5, 10, 15]
         }
         
+        // Calculate step size for 3 intervals (4 values including zero)
+        let steps = 3
         let stepSize = max(1, maxValue / steps)
         
-        for i in 0..<gridLineCount {
-            values.append(min(stepSize * i, maxValue))
+        var values: [Int] = []
+        for i in 0...steps {
+            if i == steps {
+                // Last value is exactly maxValue
+                values.append(maxValue)
+            } else {
+                values.append(stepSize * i)
+            }
         }
-        
-        // Ensure the last value is exactly maxValue
-        values[gridLineCount - 1] = maxValue
         
         return values
     }
@@ -496,10 +582,13 @@ struct WeeklyRingView: View {
     let plan: WorkoutPlan?
     let selectedDate: Date?
     @State private var refreshTrigger = UUID()
+    @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     
     var body: some View {
         let weekDays = getWeekDays()
         let profile = ProfileStore.load()
+        let accentColor = themeManager.accentColor.color
         
         HStack(spacing: 8) {
             ForEach(Array(weekDays.enumerated()), id: \.offset) { index, day in
@@ -510,36 +599,35 @@ struct WeeklyRingView: View {
                         .foregroundStyle(day.isToday ? .white : .secondary)
                     
                     // Single color-coded ring
-                    NavigationLink(destination: CalendarView()) {
+                    NavigationLink(destination: CalendarView(initialDate: day.date)) {
                         ZStack {
-                            // Ring based on status
+                            // Ring based on status (outer)
                             let ringColor = getRingColor(for: day, profile: profile)
                             let ringProgress = day.status == .missed ? 1.0 : day.repsRing
                             
                             if ringColor != Color.clear {
                                 Circle()
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 3)
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 4)
+                                    .frame(width: 45, height: 45)
                                 
                                 Circle()
                                     .trim(from: 0, to: ringProgress)
-                                    .stroke(ringColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                                    .stroke(ringColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
+                                    .frame(width: 45, height: 45)
                             }
-                        }
-                        .frame(width: 45, height: 45)
-                        .overlay(
+                            
+                            // Background circle with accent color (inner, smaller for spacing)
                             Circle()
-                                .strokeBorder(day.isToday ? Color.white : Color.clear, lineWidth: 1.5)
-                                .background(
-                                    Circle()
-                                        .fill(day.isToday ? Color.accentColor.opacity(0.3) : Color.clear)
-                                )
-                        )
-                        .overlay(
+                                .fill(day.isToday ? accentColor.opacity(0.4) : accentColor.opacity(0.15))
+                                .frame(width: 37, height: 37)
+                            
+                            // Center text - theme aware
                             Text(day.repsText)
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(day.isToday ? .white : .primary)
-                        )
+                                .foregroundStyle(colorScheme == .dark ? .white : .black)
+                        }
+                        .frame(width: 45, height: 45)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -547,7 +635,7 @@ struct WeeklyRingView: View {
             }
         }
         .padding(12)
-        .background(.ultraThinMaterial)
+        .background(Color.gray.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .id(refreshTrigger)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionsUpdated"))) { _ in
@@ -587,14 +675,17 @@ struct WeeklyRingView: View {
         let calendar = Calendar.current
         let now = Date()
         let sessions = SessionStore.load()
+        let profile = ProfileStore.load()
 
-        // Start week on Monday explicitly
+        // Start week on Sunday
         var comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
-        comps.weekday = 2 // Monday
+        comps.weekday = 1 // Sunday
         guard let weekStart = calendar.date(from: comps) else { return createEmptyWeek() }
 
-        let weekDayNames = ["M", "T", "W", "T", "F", "S", "S"]
+        let weekDayNames = ["S", "M", "T", "W", "T", "F", "S"] // Sunday to Saturday
         var result: [WeekDayData] = []
+        
+        let todayStart = calendar.startOfDay(for: now)
         
         for i in 0..<7 {
             guard let dayDate = calendar.date(byAdding: .day, value: i, to: weekStart) else {
@@ -636,14 +727,40 @@ struct WeeklyRingView: View {
             // Display total reps in center
             let repsText = dayReps > 0 ? "\(dayReps)" : ""
             
-            // Determine status
+            // Determine status based on day context
             let status: DayStatus
-            if dayReps == 0 {
-                status = .missed
-            } else if ring1 >= 1.0 {
-                status = .complete
+            
+            // Check if before onboarding
+            if let onboardingDate = profile?.onboardingDate {
+                let onboardingStart = calendar.startOfDay(for: onboardingDate)
+                if dayStart < onboardingStart {
+                    status = .none
+                } else if dayStart > todayStart {
+                    // Future date
+                    status = .none
+                } else {
+                    // Past or today
+                    if dayReps == 0 {
+                        status = .missed
+                    } else if ring1 >= 1.0 {
+                        status = .complete
+                    } else {
+                        status = .partial(progress: ring1)
+                    }
+                }
             } else {
-                status = .partial(progress: ring1)
+                // No onboarding date, check if future
+                if dayStart > todayStart {
+                    status = .none
+                } else {
+                    if dayReps == 0 {
+                        status = .missed
+                    } else if ring1 >= 1.0 {
+                        status = .complete
+                    } else {
+                        status = .partial(progress: ring1)
+                    }
+                }
             }
             
             result.append(WeekDayData(
@@ -664,16 +781,15 @@ struct WeeklyRingView: View {
     private func createEmptyWeek() -> [WeekDayData] {
         let calendar = Calendar.current
         let now = Date()
-        let weekDayNames = ["M", "T", "W", "T", "F", "S", "S"]
-        let currentDayOfWeek = calendar.component(.weekday, from: now) - 1
-        let adjustedDayOfWeek = (currentDayOfWeek + 6) % 7 // Convert to Monday-based week
+        let weekDayNames = ["S", "M", "T", "W", "T", "F", "S"] // Sunday to Saturday
+        let currentDayOfWeek = calendar.component(.weekday, from: now) - 1 // 0 = Sunday
         
         return (0..<7).map { i in
             let dayName = weekDayNames[i]
-            let isToday = i == adjustedDayOfWeek
+            let isToday = i == currentDayOfWeek
             return WeekDayData(dayName: dayName, isToday: isToday, date: now, repsRing: 0.0, completionRing: 0.0, extraRing: 0.0, repsText: "", status: .none)
+        }
     }
-}
 }
 
 struct WeekDayData {
@@ -685,4 +801,118 @@ struct WeekDayData {
     let extraRing: Double
     let repsText: String
     let status: DayStatus
+}
+
+struct WeeklyCaloriesChart: View {
+    let sessions: [WorkoutSession]
+    @EnvironmentObject var themeManager: ThemeManager
+    
+    private let chartHeight: CGFloat = 100
+    
+    var body: some View {
+        let weekData = getWeeklyCaloriesData()
+        let maxCalories = weekData.map { $0.calories }.max() ?? 100
+        
+        VStack(spacing: 8) {
+            // Line chart
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let height = chartHeight
+                
+                ZStack(alignment: .bottomLeading) {
+                    // Grid lines
+                    ForEach(0..<3, id: \.self) { index in
+                        let yPosition = CGFloat(index) * (height / 2)
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.1))
+                            .frame(height: 0.5)
+                            .position(x: width / 2, y: yPosition)
+                    }
+                    
+                    // Line path
+                    Path { path in
+                        let stepX = width / CGFloat(max(1, weekData.count - 1))
+                        
+                        for (index, data) in weekData.enumerated() {
+                            let x = CGFloat(index) * stepX
+                            let normalizedValue = maxCalories > 0 ? CGFloat(data.calories) / CGFloat(maxCalories) : 0
+                            let y = height - (normalizedValue * height)
+                            
+                            if index == 0 {
+                                path.move(to: CGPoint(x: x, y: y))
+                            } else {
+                                path.addLine(to: CGPoint(x: x, y: y))
+                            }
+                        }
+                    }
+                    .stroke(themeManager.accentColor.color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    
+                    // Data points
+                    ForEach(Array(weekData.enumerated()), id: \.offset) { index, data in
+                        let stepX = width / CGFloat(max(1, weekData.count - 1))
+                        let x = CGFloat(index) * stepX
+                        let normalizedValue = maxCalories > 0 ? CGFloat(data.calories) / CGFloat(maxCalories) : 0
+                        let y = height - (normalizedValue * height)
+                        
+                        Circle()
+                            .fill(themeManager.accentColor.color)
+                            .frame(width: 6, height: 6)
+                            .position(x: x, y: y)
+                    }
+                }
+                .frame(height: height)
+            }
+            .frame(height: chartHeight)
+            
+            // Day labels
+            HStack(spacing: 0) {
+                ForEach(Array(weekData.enumerated()), id: \.offset) { _, data in
+                    VStack(spacing: 4) {
+                        Text(data.dayName)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Text("\(Int(data.calories))")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(themeManager.accentColor.color)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.2))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+    
+    private func getWeeklyCaloriesData() -> [CaloriesData] {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        // Start week on Sunday
+        var comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
+        comps.weekday = 1 // Sunday
+        guard let startOfWeek = calendar.date(from: comps) else { return [] }
+        
+        let weekDayNames = ["S", "M", "T", "W", "T", "F", "S"]
+        var result: [CaloriesData] = []
+        
+        for i in 0..<7 {
+            guard let date = calendar.date(byAdding: .day, value: i, to: startOfWeek) else { continue }
+            
+            let dayStart = calendar.startOfDay(for: date)
+            guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { continue }
+            
+            let daySessions = sessions.filter { $0.date >= dayStart && $0.date < dayEnd }
+            let totalCalories = daySessions.reduce(0.0) { $0 + $1.caloriesBurned }
+            
+            result.append(CaloriesData(dayName: weekDayNames[i], calories: totalCalories))
+        }
+        
+        return result
+    }
+}
+
+struct CaloriesData {
+    let dayName: String
+    let calories: Double
 }

@@ -6,11 +6,17 @@
 import SwiftUI
 
 struct CalendarView: View {
+    let initialDate: Date?
+    
     @State private var sessions: [WorkoutSession] = SessionStore.load()
     @State private var plan: WorkoutPlan? = PlanStore.load()
     @State private var profile: UserProfile? = ProfileStore.load()
     @State private var selectedDate: Date = Date()
     @State private var showDetailView: Bool = false
+    
+    init(initialDate: Date? = nil) {
+        self.initialDate = initialDate
+    }
     
     private let calendar = Calendar.current
     private var today: Date { Date() }
@@ -38,7 +44,21 @@ struct CalendarView: View {
                 .padding(.vertical)
             }
             .navigationTitle("Activity")
-            .onAppear { 
+            .background(
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .onAppear {
+                // If initial date is provided, select it and show detail view
+                if let initialDate = initialDate {
+                    selectedDate = initialDate
+                    showDetailView = true
+                }
+                
                 sessions = SessionStore.load()
                 plan = PlanStore.load()
                 profile = ProfileStore.load()
@@ -259,10 +279,13 @@ struct CalendarDayView: View {
     let isToday: Bool
     let status: DayStatus
     let isSelected: Bool
+    @EnvironmentObject var themeManager: ThemeManager
     
     private let calendar = Calendar.current
     
     var body: some View {
+        let accentColor = themeManager.accentColor.color
+        
         ZStack {
             // Progress ring based on status
             switch status {
@@ -300,18 +323,18 @@ struct CalendarDayView: View {
             // Background circle for selected/today
             if isSelected {
                 Circle()
-                    .fill(Color.accentColor)
+                    .fill(accentColor)
                     .frame(width: 36, height: 36)
             } else if isToday && status == .none {
                 Circle()
-                    .stroke(Color.accentColor, lineWidth: 2)
+                    .stroke(accentColor, lineWidth: 2)
                     .frame(width: 36, height: 36)
             }
             
             // Day number
             Text("\(calendar.component(.day, from: date))")
                 .font(.system(size: 14, weight: isToday || isSelected ? .bold : .regular))
-                .foregroundStyle(isSelected ? .white : (isToday ? .accentColor : .primary))
+                .foregroundStyle(isSelected ? .white : (isToday ? accentColor : .primary))
         }
         .frame(width: 48, height: 48)
     }

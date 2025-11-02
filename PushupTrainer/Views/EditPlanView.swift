@@ -36,6 +36,15 @@ struct EditPlanView: View {
     var body: some View {
         formContent
             .navigationTitle("Edit Plan")
+            .scrollContentBackground(.hidden)
+            .background(
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
             .onAppear { 
                 plan = PlanStore.load()
                 populateFields() 
@@ -77,7 +86,7 @@ struct EditPlanView: View {
                             }
                         }.pickerStyle(.menu)
                     }
-                    Button("Apply and Regenerate Plan") { regeneratePlan() }
+                    Button("Regenerate Plan") { regeneratePlan() }
                 }
 
                 Section("Daily Targets (tap to edit)") {

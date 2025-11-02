@@ -314,9 +314,10 @@ struct WorkoutView: View {
                 .ignoresSafeArea()
         )
         .sheet(isPresented: $vm.showPlanPreview) {
-            PlanPreviewSheet(plan: plan, onStart: { index, target in
+            PlanPreviewSheet(plan: plan, onStart: { index, target, mode in
                 vm.selectedPlanDayIndex = index
                 vm.selectedTargetReps = target
+                vm.mode = mode
                 vm.showPlanPreview = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     vm.start()
@@ -384,47 +385,80 @@ struct WorkoutView: View {
 
 struct PlanPreviewSheet: View {
     let plan: WorkoutPlan?
-    let onStart: (_ index: Int?, _ targetReps: Int?) -> Void
+    let onStart: (_ index: Int?, _ targetReps: Int?, _ mode: WorkoutMode) -> Void
     let onCancel: () -> Void
     @State private var selectedTarget: Int? = nil
     @State private var selectedIndex: Int? = nil
+    @State private var selectedMode: WorkoutMode = .manual
+    
+    private var modeDescriptionView: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(selectedMode.description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+    
+    private var modeSectionView: some View {
+        Section("Workout Mode") {
+            Picker("Mode", selection: $selectedMode) {
+                Text("Manual").tag(WorkoutMode.manual)
+                Text("Timer").tag(WorkoutMode.timer)
+                Text("Voice").tag(WorkoutMode.voice)
+            }
+            .pickerStyle(.segmented)
+            
+            modeDescriptionView
+        }
+    }
+    
+    private func planOverviewSection(plan: WorkoutPlan) -> some View {
+        Section("Plan Overview") {
+            HStack {
+                Text("Total Days")
+                Spacer()
+                Text("\(plan.totalDays)")
+            }
+            HStack {
+                Text("Progress")
+                Spacer()
+                Text("\(plan.days.filter { $0.isCompleted }.count) / \(plan.totalDays)")
+            }
+        }
+    }
+    
+    private func selectDaySection(plan: WorkoutPlan) -> some View {
+        Section("Select Day") {
+            ForEach(Array(plan.days.enumerated()), id: \.element.id) { pair in
+                let day = pair.element
+                let idx = pair.offset
+                Button(action: { selectedIndex = idx; selectedTarget = day.targetReps }) {
+                    HStack {
+                        Image(systemName: (selectedIndex == idx) ? "largecircle.fill.circle" : "circle")
+                            .foregroundStyle((selectedIndex == idx) ? .blue : .secondary)
+                        Text("Day \(day.dayNumber)")
+                        Spacer()
+                        HStack(spacing: 8) {
+                            if day.isCompleted { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+                            Text("\(day.targetReps) reps")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     var body: some View {
         NavigationView {
             List {
                 if let plan = plan {
-                    Section("Plan Overview") {
-                        HStack {
-                            Text("Total Days")
-                            Spacer()
-                            Text("\(plan.totalDays)")
-                        }
-                        HStack {
-                            Text("Progress")
-                            Spacer()
-                            Text("\(plan.days.filter { $0.isCompleted }.count) / \(plan.totalDays)")
-                        }
-                    }
-
-                    Section("Select Day") {
-                        ForEach(Array(plan.days.enumerated()), id: \.element.id) { pair in
-                            let day = pair.element
-                            let idx = pair.offset
-                            Button(action: { selectedIndex = idx; selectedTarget = day.targetReps }) {
-                                HStack {
-                                    Image(systemName: (selectedIndex == idx) ? "largecircle.fill.circle" : "circle")
-                                        .foregroundStyle((selectedIndex == idx) ? .blue : .secondary)
-                                    Text("Day \(day.dayNumber)")
-                                    Spacer()
-                                    HStack(spacing: 8) {
-                                        if day.isCompleted { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
-                                        Text("\(day.targetReps) reps")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    modeSectionView
+                    planOverviewSection(plan: plan)
+                    selectDaySection(plan: plan)
                 } else {
                     Text("No plan available.")
                         .foregroundStyle(.secondary)
@@ -434,9 +468,14 @@ struct PlanPreviewSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onCancel) }
-                ToolbarItem(placement: .confirmationAction) { Button("Start Workout") { onStart(selectedIndex, selectedTarget) } }
+                ToolbarItem(placement: .confirmationAction) { Button("Start Workout") { onStart(selectedIndex, selectedTarget, selectedMode) } }
             }
             .onAppear {
+                // Load default mode from profile
+                if let profile = ProfileStore.load() {
+                    selectedMode = profile.defaultMode ?? .manual
+                }
+                
                 // Auto-select the first incomplete day after the last completed day
                 if let plan = plan {
                     var lastCompletedIndex = -1

@@ -22,16 +22,56 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum AccentColor: String, CaseIterable, Identifiable, Codable {
+    case blue = "Blue"
+    case purple = "Purple"
+    case green = "Green"
+    case orange = "Orange"
+    case pink = "Pink"
+    case red = "Red"
+    case teal = "Teal"
+    case indigo = "Indigo"
+    
+    var id: String { rawValue }
+    
+    var color: Color {
+        switch self {
+        case .purple: return .purple
+        case .blue: return .blue
+        case .green: return .green
+        case .orange: return .orange
+        case .pink: return .pink
+        case .red: return .red
+        case .teal: return .teal
+        case .indigo: return .indigo
+        }
+    }
+    
+    var icon: String {
+        return "circle.fill"
+    }
+}
+
 final class ThemeManager: ObservableObject {
-    private let storageKey = "appTheme"
+    private let themeStorageKey = "appTheme"
+    private let accentStorageKey = "accentColor"
 
     @Published var theme: AppTheme {
-        didSet { UserDefaults.standard.set(theme.rawValue, forKey: storageKey) }
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: themeStorageKey) }
+    }
+    
+    @Published var accentColor: AccentColor {
+        didSet { 
+            UserDefaults.standard.set(accentColor.rawValue, forKey: accentStorageKey)
+        }
     }
 
     init() {
-        let raw = UserDefaults.standard.string(forKey: storageKey) ?? AppTheme.system.rawValue
-        theme = AppTheme(rawValue: raw) ?? .system
+        let themeRaw = UserDefaults.standard.string(forKey: themeStorageKey) ?? AppTheme.system.rawValue
+        theme = AppTheme(rawValue: themeRaw) ?? .system
+        
+        let accentRaw = UserDefaults.standard.string(forKey: accentStorageKey) ?? AccentColor.blue.rawValue
+        accentColor = AccentColor(rawValue: accentRaw) ?? .blue
     }
 }
 

@@ -19,12 +19,15 @@ struct RootView: View {
         }
         .environmentObject(themeManager)
         .preferredColorScheme(themeManager.theme.colorScheme)
+        .tint(themeManager.accentColor.color)
         .animation(.easeInOut, value: themeManager.theme)
+        .animation(.easeInOut, value: themeManager.accentColor)
     }
 }
 
 struct MainTabView: View {
     @State private var selectedTab = 0
+    @EnvironmentObject var themeManager: ThemeManager
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -50,6 +53,7 @@ struct MainTabView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(4)
         }
+        .tint(themeManager.accentColor.color)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionsUpdated"))) { _ in
             if selectedTab == 1 { selectedTab = 0 }
         }

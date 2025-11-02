@@ -123,6 +123,15 @@ struct EditProfileView: View {
         .navigationTitle("Edit Profile")
         .navigationBarTitleDisplayMode(.inline)
         .defaultScrollAnchor(.top)
+        .scrollContentBackground(.hidden)
+        .background(
+            LinearGradient(
+                colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        )
         .onAppear {
             if let p = profile {
                 heightUnit = p.units.height

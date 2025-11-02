@@ -44,6 +44,33 @@ struct SettingsView: View {
                         }
                     }
                 }
+                
+                Section("Accent Color") {
+                    HStack(spacing: 12) {
+                        ForEach(AccentColor.allCases) { accent in
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    themeManager.accentColor = accent
+                                }
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(accent.color)
+                                        .frame(width: 36, height: 36)
+                                    
+                                    if themeManager.accentColor == accent {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                }
 
             // Removed View Plan; reset moved into Edit Plan screen
 
@@ -80,6 +107,15 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .defaultScrollAnchor(.top)
+            .scrollContentBackground(.hidden)
+            .background(
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
             .onAppear { profile = ProfileStore.load() }
         }
     }

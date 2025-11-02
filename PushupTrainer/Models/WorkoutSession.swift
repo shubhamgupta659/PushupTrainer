@@ -5,7 +5,35 @@
 
 import Foundation
 
-enum WorkoutMode: String, Codable, CaseIterable, Identifiable { case manual, timer, voice; var id: String { rawValue } }
+enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
+    case manual, timer, voice
+    
+    var id: String { rawValue }
+    
+    var label: String {
+        switch self {
+        case .manual: return "Manual"
+        case .timer: return "Timer"
+        case .voice: return "Voice"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .manual: return "hand.tap.fill"
+        case .timer: return "timer"
+        case .voice: return "waveform"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .manual: return "Tap the circle to count each rep"
+        case .timer: return "Auto-counts reps every 3 seconds"
+        case .voice: return "Voice-activated rep counting"
+        }
+    }
+}
 
 struct WorkoutSession: Codable, Identifiable, Equatable {
     var id: UUID
