@@ -155,28 +155,17 @@ struct OnboardingView: View {
             .padding(20)
         }
         .background(
-            Group {
-                if shouldUseLightTheme {
-                    LinearGradient(gradient: Gradient(colors: [Color.white, Color(white:0.95)]), startPoint: .top, endPoint: .bottom)
-                } else {
-                    LinearGradient(gradient: Gradient(colors: [Color(red:0.05, green:0.08, blue:0.18), Color(red:0.18, green:0.06, blue:0.20)]), startPoint: .top, endPoint: .bottom)
-                }
+            ZStack {
+                Color(uiColor: .systemBackground)
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             }
             .ignoresSafeArea()
-            .id(themeManager.theme)
         )
         .sheet(isPresented: $showPolicy) { PolicyView() }
-    }
-
-    private var shouldUseLightTheme: Bool {
-        switch themeManager.theme {
-        case .light:
-            return true
-        case .dark:
-            return false
-        case .system:
-            return (UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.windows.first }.first?.traitCollection.userInterfaceStyle == .light)
-        }
     }
 
     private func normalizedHeightCm() -> Double {

@@ -19,15 +19,13 @@ struct RootView: View {
         }
         .environmentObject(themeManager)
         .preferredColorScheme(themeManager.theme.colorScheme)
-        .tint(themeManager.accentColor.color)
-        .animation(.easeInOut, value: themeManager.theme)
-        .animation(.easeInOut, value: themeManager.accentColor)
     }
 }
 
 struct MainTabView: View {
     @State private var selectedTab = 0
     @EnvironmentObject var themeManager: ThemeManager
+    @State private var tintColor: Color = .blue
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -53,9 +51,17 @@ struct MainTabView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(4)
         }
-        .tint(themeManager.accentColor.color)
+        .tint(tintColor)
+        .onAppear {
+            tintColor = themeManager.accentColor.color
+        }
+        .onChange(of: themeManager.accentColor) { _, newColor in
+            tintColor = newColor.color
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionsUpdated"))) { _ in
-            if selectedTab == 1 { selectedTab = 0 }
+            if selectedTab == 1 { 
+                selectedTab = 0
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateHome"))) { _ in
             selectedTab = 0

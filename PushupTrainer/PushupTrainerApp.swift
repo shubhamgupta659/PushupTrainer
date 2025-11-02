@@ -11,6 +11,16 @@ import Combine
 @main
 struct PushupTrainerApp: App {
     init() {
+        // Set default theme to system on first launch
+        if UserDefaults.standard.object(forKey: "appTheme") == nil {
+            UserDefaults.standard.set("system", forKey: "appTheme")
+        }
+        
+        // Set default accent to blue on first launch
+        if UserDefaults.standard.object(forKey: "accentColor") == nil {
+            UserDefaults.standard.set("Blue", forKey: "accentColor")
+        }
+        
         // Generate test data on app launch (DEBUG only)
         #if DEBUG
         // Uncomment the line below to generate test data

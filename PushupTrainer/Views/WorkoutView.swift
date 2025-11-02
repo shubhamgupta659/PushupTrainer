@@ -310,8 +310,15 @@ struct WorkoutView: View {
             }
         }
         .background(
-            LinearGradient(colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea()
+            ZStack {
+                Color(uiColor: .systemBackground)
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            .ignoresSafeArea()
         )
         .sheet(isPresented: $vm.showPlanPreview) {
             PlanPreviewSheet(plan: plan, onStart: { index, target, mode in
@@ -360,6 +367,8 @@ struct WorkoutView: View {
                         SessionStore.save(all)
                         // Notify that sessions have been updated
                         NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)
+                        // Handle notification logic for workout completion
+                        NotificationManager.shared.onWorkoutCompleted()
                     }
                     dismiss()
                 }

@@ -127,11 +127,14 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .principal) { Text("").font(.headline) } }
             .background(
-                LinearGradient(
-                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                ZStack {
+                    Color(uiColor: .systemBackground)
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
                 .ignoresSafeArea()
             )
             .onAppear {
@@ -831,10 +834,12 @@ struct WeeklyCaloriesChart: View {
                     
                     // Line path
                     Path { path in
-                        let stepX = width / CGFloat(max(1, weekData.count - 1))
+                        // Divide width into 7 equal columns (one for each day)
+                        let columnWidth = width / 7.0
                         
                         for (index, data) in weekData.enumerated() {
-                            let x = CGFloat(index) * stepX
+                            // Center point within each column
+                            let x = (CGFloat(index) * columnWidth) + (columnWidth / 2.0)
                             let normalizedValue = maxCalories > 0 ? CGFloat(data.calories) / CGFloat(maxCalories) : 0
                             let y = height - (normalizedValue * height)
                             
@@ -849,8 +854,10 @@ struct WeeklyCaloriesChart: View {
                     
                     // Data points
                     ForEach(Array(weekData.enumerated()), id: \.offset) { index, data in
-                        let stepX = width / CGFloat(max(1, weekData.count - 1))
-                        let x = CGFloat(index) * stepX
+                        // Divide width into 7 equal columns (one for each day)
+                        let columnWidth = width / 7.0
+                        // Center point within each column
+                        let x = (CGFloat(index) * columnWidth) + (columnWidth / 2.0)
                         let normalizedValue = maxCalories > 0 ? CGFloat(data.calories) / CGFloat(maxCalories) : 0
                         let y = height - (normalizedValue * height)
                         
@@ -888,14 +895,15 @@ struct WeeklyCaloriesChart: View {
         let calendar = Calendar.current
         let now = Date()
         
-        // Start week on Sunday
+        // Start week on Sunday (same logic as WeeklyRingView)
         var comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
-        comps.weekday = 1 // Sunday
+        comps.weekday = 1 // Sunday = 1
         guard let startOfWeek = calendar.date(from: comps) else { return [] }
         
         let weekDayNames = ["S", "M", "T", "W", "T", "F", "S"]
         var result: [CaloriesData] = []
         
+        // Always return exactly 7 days
         for i in 0..<7 {
             guard let date = calendar.date(byAdding: .day, value: i, to: startOfWeek) else { continue }
             
@@ -908,7 +916,8 @@ struct WeeklyCaloriesChart: View {
             result.append(CaloriesData(dayName: weekDayNames[i], calories: totalCalories))
         }
         
-        return result
+        // Ensure we always return exactly 7 days
+        return Array(result.prefix(7))
     }
 }
 

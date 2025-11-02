@@ -15,10 +15,14 @@ enum AppTheme: String, CaseIterable, Identifiable, Codable {
 
     var colorScheme: ColorScheme? {
         switch self {
-        case .system: return nil
+        case .system: return nil  // nil tells SwiftUI to follow device appearance
         case .light: return .light
         case .dark: return .dark
         }
+    }
+    
+    var displayName: String {
+        rawValue.capitalized
     }
 }
 
@@ -57,7 +61,9 @@ final class ThemeManager: ObservableObject {
     private let accentStorageKey = "accentColor"
 
     @Published var theme: AppTheme {
-        didSet { UserDefaults.standard.set(theme.rawValue, forKey: themeStorageKey) }
+        didSet { 
+            UserDefaults.standard.set(theme.rawValue, forKey: themeStorageKey)
+        }
     }
     
     @Published var accentColor: AccentColor {

@@ -125,11 +125,14 @@ struct EditProfileView: View {
         .defaultScrollAnchor(.top)
         .scrollContentBackground(.hidden)
         .background(
-            LinearGradient(
-                colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            ZStack {
+                Color(uiColor: .systemBackground)
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
             .ignoresSafeArea()
         )
         .onAppear {

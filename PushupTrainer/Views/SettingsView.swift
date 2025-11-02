@@ -8,11 +8,40 @@ import PhotosUI
 
 struct SettingsView: View {
     @EnvironmentObject var themeManager: ThemeManager
+    @StateObject private var notificationManager = NotificationManager.shared
     @State private var profile: UserProfile? = ProfileStore.load()
     @AppStorage("premiumUnlocked") private var premiumUnlocked: Bool = false
     @AppStorage("analyticsOptIn") private var analyticsOptIn: Bool = false
     @AppStorage("healthSyncEnabled") private var healthSyncEnabled: Bool = false
     @State private var avatarSelection: PhotosPickerItem? = nil
+    
+    // Notification settings
+    @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = false
+    @AppStorage("reminderType") private var reminderTypeRaw: String = ReminderType.specificTime.rawValue
+    @AppStorage("reminderHour") private var reminderHour: Int = 18
+    @AppStorage("reminderMinute") private var reminderMinute: Int = 0
+    @AppStorage("reminderInterval") private var reminderInterval: Int = 4
+    @State private var showNotificationPermissionAlert = false
+    
+    private var reminderType: ReminderType {
+        ReminderType(rawValue: reminderTypeRaw) ?? .specificTime
+    }
+    
+    private var reminderTime: Binding<Date> {
+        Binding(
+            get: {
+                var components = DateComponents()
+                components.hour = reminderHour
+                components.minute = reminderMinute
+                return Calendar.current.date(from: components) ?? Date()
+            },
+            set: { newValue in
+                let components = Calendar.current.dateComponents([.hour, .minute], from: newValue)
+                reminderHour = components.hour ?? 18
+                reminderMinute = components.minute ?? 0
+            }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -37,42 +66,90 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Theme") {
-                    Picker("Appearance", selection: $themeManager.theme) {
+                Section("Appearance") {
+                    // Theme Picker
+                    Picker("Theme", selection: $themeManager.theme) {
                         ForEach(AppTheme.allCases) { t in
-                            Text(t.rawValue.capitalized).tag(t)
+                            Text(t.displayName).tag(t)
                         }
                     }
-                }
-                
-                Section("Accent Color") {
-                    HStack(spacing: 12) {
-                        ForEach(AccentColor.allCases) { accent in
-                            Button(action: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    themeManager.accentColor = accent
-                                }
-                            }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(accent.color)
-                                        .frame(width: 36, height: 36)
-                                    
-                                    if themeManager.accentColor == accent {
-                                        Image(systemName: "checkmark")
-                                            .font(.caption.bold())
-                                            .foregroundStyle(.white)
+                    
+                    // Accent Color Picker
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Accent Color")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 12) {
+                            ForEach(AccentColor.allCases) { accent in
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        themeManager.accentColor = accent
+                                    }
+                                }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(accent.color)
+                                            .frame(width: 36, height: 36)
+                                        
+                                        if themeManager.accentColor == accent {
+                                            Image(systemName: "checkmark")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.white)
+                                        }
                                     }
                                 }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
                 }
 
-            // Removed View Plan; reset moved into Edit Plan screen
+                // Removed View Plan; reset moved into Edit Plan screen
+                
+                Section("Workout Reminders") {
+                    Toggle("Enable Reminders", isOn: $notificationsEnabled)
+                        .onChange(of: notificationsEnabled) { _, newValue in
+                            handleNotificationToggle(newValue)
+                        }
+                    
+                    if notificationsEnabled {
+                        Picker("Reminder Type", selection: $reminderTypeRaw) {
+                            ForEach(ReminderType.allCases, id: \.rawValue) { type in
+                                Text(type.rawValue).tag(type.rawValue)
+                            }
+                        }
+                        .onChange(of: reminderTypeRaw) { _, _ in
+                            scheduleNotifications()
+                        }
+                        
+                        if reminderType == .specificTime {
+                            DatePicker("Reminder Time", selection: reminderTime, displayedComponents: .hourAndMinute)
+                                .onChange(of: reminderHour) { _, _ in
+                                    scheduleNotifications()
+                                }
+                                .onChange(of: reminderMinute) { _, _ in
+                                    scheduleNotifications()
+                                }
+                            
+                        } else {
+                            Picker("Reminder Interval", selection: $reminderInterval) {
+                                Text("Every 4 hours").tag(4)
+                                Text("Every 6 hours").tag(6)
+                                Text("Every 8 hours").tag(8)
+                            }
+                            .onChange(of: reminderInterval) { _, _ in
+                                scheduleNotifications()
+                            }
+                            
+                            Text("You'll receive reminders throughout the day at regular intervals (8am, 12pm, 4pm, 8pm).")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
 
             Section("Premium") {
                 Toggle("Premium Unlocked (placeholder)", isOn: $premiumUnlocked)
@@ -109,14 +186,30 @@ struct SettingsView: View {
             .defaultScrollAnchor(.top)
             .scrollContentBackground(.hidden)
             .background(
-                LinearGradient(
-                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                ZStack {
+                    Color(uiColor: .systemBackground)
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
                 .ignoresSafeArea()
             )
-            .onAppear { profile = ProfileStore.load() }
+            .onAppear { 
+                profile = ProfileStore.load()
+                notificationManager.checkAuthorizationStatus()
+            }
+            .alert("Notification Permission Required", isPresented: $showNotificationPermissionAlert) {
+                Button("Open Settings", role: .none) {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Please enable notifications in Settings to receive workout reminders.")
+            }
         }
     }
 
@@ -125,7 +218,45 @@ struct SettingsView: View {
         PlanStore.delete()
         UserDefaults.standard.removeObject(forKey: "userProfile")
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        notificationManager.cancelAllReminders()
+        notificationsEnabled = false
         profile = nil
+        
+        // Reset theme and accent to defaults
+        themeManager.theme = .system
+        themeManager.accentColor = .blue
+    }
+    
+    // MARK: - Notification Helpers
+    
+    private func handleNotificationToggle(_ enabled: Bool) {
+        if enabled {
+            // Request permission if not already granted
+            notificationManager.requestAuthorization { granted in
+                if granted {
+                    scheduleNotifications()
+                } else {
+                    // Permission denied, turn off toggle
+                    DispatchQueue.main.async {
+                        notificationsEnabled = false
+                        showNotificationPermissionAlert = true
+                    }
+                }
+            }
+        } else {
+            // Cancel all notifications
+            notificationManager.cancelAllReminders()
+        }
+    }
+    
+    private func scheduleNotifications() {
+        guard notificationsEnabled else { return }
+        
+        if reminderType == .specificTime {
+            notificationManager.scheduleSpecificTimeReminder(hour: reminderHour, minute: reminderMinute)
+        } else {
+            notificationManager.scheduleIntervalReminders(intervalHours: reminderInterval)
+        }
     }
 }
 
