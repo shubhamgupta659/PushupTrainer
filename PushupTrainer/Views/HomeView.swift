@@ -468,8 +468,8 @@ struct HomeView: View {
         
         let monthNames = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"]
         
-        // Show all months up to current month
-        return (1...currentMonth).map { month in
+        // Show all 12 months of the year
+        return (1...12).map { month in
             BarData(label: monthNames[month - 1], value: monthlyReps[month] ?? 0)
         }
     }
