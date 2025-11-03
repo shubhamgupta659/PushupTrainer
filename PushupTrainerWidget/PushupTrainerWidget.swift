@@ -21,6 +21,7 @@ struct WeekSummary: Codable {
     let totalSessions: Int
     let averageReps: Int
     let currentStreak: Int
+    let totalCalories: Int
 }
 
 // MARK: - Timeline Provider
@@ -28,7 +29,7 @@ struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> WorkoutEntry {
         WorkoutEntry(
             date: Date(),
-            weekSummary: WeekSummary(totalReps: 350, totalSessions: 7, averageReps: 50, currentStreak: 7),
+            weekSummary: WeekSummary(totalReps: 350, totalSessions: 7, averageReps: 50, currentStreak: 7, totalCalories: 175),
             recentSessions: generatePlaceholderSessions(),
             accentColor: loadAccentColor()
         )
@@ -96,12 +97,20 @@ struct Provider: TimelineProvider {
     // MARK: - Data Loading
     private func loadWeekSummary() -> WeekSummary {
         let sessions = loadRecentSessions()
-        let calendar = Calendar.current
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date())!
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday = 1
         
-        let weekSessions = sessions.filter { $0.date >= weekAgo }
+        // Get start of current week (Sunday)
+        let today = Date()
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today))!
+        
+        // Get end of current week (Saturday)
+        let endOfWeek = calendar.date(byAdding: .day, value: 6, to: startOfWeek)!
+        
+        let weekSessions = sessions.filter { $0.date >= startOfWeek && $0.date <= endOfWeek }
         let totalReps = weekSessions.reduce(0) { $0 + $1.reps }
         let averageReps = weekSessions.isEmpty ? 0 : totalReps / weekSessions.count
+        let totalCalories = Int(weekSessions.reduce(0.0) { $0 + $1.caloriesBurned })
         
         // Calculate streak
         var streak = 0
@@ -120,7 +129,8 @@ struct Provider: TimelineProvider {
             totalReps: totalReps,
             totalSessions: weekSessions.count,
             averageReps: averageReps,
-            currentStreak: streak
+            currentStreak: streak,
+            totalCalories: totalCalories
         )
     }
     
@@ -150,23 +160,33 @@ struct Provider: TimelineProvider {
         print("[Widget] ✅ Loaded \(sessions.count) total sessions from App Group")
         #endif
         
-        // Return last 7 days of sessions
-        let calendar = Calendar.current
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date())!
-        let recentSessions = sessions.filter { $0.date >= weekAgo }.sorted { $0.date < $1.date }
+        // Return sessions from current week (Sunday to Saturday)
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday = 1
+        
+        let today = Date()
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today))!
+        let endOfWeek = calendar.date(byAdding: .day, value: 6, to: startOfWeek)!
+        
+        let recentSessions = sessions.filter { $0.date >= startOfWeek && $0.date <= endOfWeek }.sorted { $0.date < $1.date }
         
         #if DEBUG
-        print("[Widget] ✅ Found \(recentSessions.count) sessions from last 7 days")
+        print("[Widget] ✅ Found \(recentSessions.count) sessions from current week (Sunday-Saturday)")
         #endif
         
         return recentSessions
     }
     
     private func generatePlaceholderSessions() -> [WorkoutSession] {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday = 1
+        
+        let today = Date()
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today))!
+        
         var sessions: [WorkoutSession] = []
         for i in 0..<7 {
-            let date = calendar.date(byAdding: .day, value: -i, to: Date())!
+            let date = calendar.date(byAdding: .day, value: i, to: startOfWeek)!
             sessions.append(WorkoutSession(
                 id: UUID(),
                 date: date,
@@ -184,7 +204,7 @@ struct Provider: TimelineProvider {
                 recoveryHeartRateDropBPM: nil
             ))
         }
-        return sessions.reversed()
+        return sessions
     }
 }
 
@@ -228,6 +248,14 @@ struct MediumWidgetView: View {
                     value: "\(entry.weekSummary.totalSessions)",
                     label: "Workouts",
                     icon: "flame.fill",
+                    color: entry.accentColor,
+                    colorScheme: colorScheme
+                )
+                
+                StatCard(
+                    value: "\(entry.weekSummary.totalCalories)",
+                    label: "Calories",
+                    icon: "bolt.fill",
                     color: entry.accentColor,
                     colorScheme: colorScheme
                 )
@@ -347,10 +375,15 @@ struct LargeWidgetView: View {
     }
     
     private func getLast7Days() -> [Date] {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday = 1
+        
+        let today = Date()
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today))!
+        
         return (0..<7).map { days in
-            calendar.date(byAdding: .day, value: -days, to: Date())!
-        }.reversed()
+            calendar.date(byAdding: .day, value: days, to: startOfWeek)!
+        }
     }
     
     private func getRepsForDay(_ day: Date) -> Int {
