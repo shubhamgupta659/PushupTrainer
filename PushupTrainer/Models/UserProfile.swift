@@ -38,7 +38,10 @@ enum ProfileStore {
     }
 
     static func save(_ profile: UserProfile) {
-        if let data = try? JSONEncoder().encode(profile) {
+        var updatedProfile = profile
+        updatedProfile.updatedAt = Date()
+        
+        if let data = try? JSONEncoder().encode(updatedProfile) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }

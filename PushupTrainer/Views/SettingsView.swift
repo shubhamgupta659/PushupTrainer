@@ -12,10 +12,11 @@ import WidgetKit
 struct SettingsView: View {
     @EnvironmentObject var themeManager: ThemeManager
     @StateObject private var notificationManager = NotificationManager.shared
+    @StateObject private var iCloudSync = iCloudSyncService.shared
     @State private var profile: UserProfile? = ProfileStore.load()
     @AppStorage("premiumUnlocked") private var premiumUnlocked: Bool = false
-    @AppStorage("analyticsOptIn") private var analyticsOptIn: Bool = false
     @AppStorage("healthSyncEnabled") private var healthSyncEnabled: Bool = false
+    @AppStorage("iCloudSyncEnabled") private var iCloudSyncEnabled: Bool = false
     @State private var avatarSelection: PhotosPickerItem? = nil
     
     // Notification settings
@@ -27,6 +28,17 @@ struct SettingsView: View {
     @AppStorage("preferredWorkoutMode") private var preferredWorkoutModeRaw: String = WorkoutMode.manual.rawValue
     @State private var showNotificationPermissionAlert = false
     @State private var showResetConfirmation = false
+    @State private var showiCloudErrorAlert = false
+    @State private var showiCloudUnavailableAlert = false
+    
+    // Device-dependent sizes
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var accentCircleSize: CGFloat {
+        horizontalSizeClass == .compact ? 32 : 36
+    }
+    private var accentSpacing: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 12
+    }
     
     private var reminderType: ReminderType {
         ReminderType(rawValue: reminderTypeRaw) ?? .specificTime
@@ -81,12 +93,12 @@ struct SettingsView: View {
                     .id("theme-picker-\(themeManager.accentColor.rawValue)")
                     
                     // Accent Color Picker
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Accent Color")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         
-                        HStack(spacing: 12) {
+                        HStack(spacing: 0) {
                             ForEach(AccentColor.allCases) { accent in
                                 Button(action: {
                                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -98,21 +110,23 @@ struct SettingsView: View {
                                     ZStack {
                                         Circle()
                                             .fill(accent.color)
-                                            .frame(width: 36, height: 36)
+                                            .frame(width: accentCircleSize, height: accentCircleSize)
                                         
                                         if themeManager.accentColor == accent {
                                             Image(systemName: "checkmark")
-                                                .font(.caption.bold())
+                                                .font(.system(size: accentCircleSize * 0.4, weight: .bold))
                                                 .foregroundStyle(.white)
                                         }
                                     }
                                 }
                                 .buttonStyle(.plain)
+                                
+                                if accent != AccentColor.allCases.last {
+                                    Spacer()
+                                }
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical, 4)
                 }
 
                 // Removed View Plan; reset moved into Edit Plan screen
@@ -166,6 +180,48 @@ struct SettingsView: View {
                     }
                 }
 
+            Section("iCloud Backup") {
+                if !iCloudSyncService.isAvailable() {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                        Text("iCloud not available. Please sign in to iCloud in Settings.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Toggle("Enable iCloud Backup", isOn: Binding(
+                        get: { iCloudSyncEnabled },
+                        set: { newVal in
+                            if newVal {
+                                enableiCloudSync()
+                            } else {
+                                iCloudSyncEnabled = false
+                            }
+                        }
+                    ))
+                    .disabled(iCloudSync.isSyncing)
+                    
+                    if iCloudSync.isSyncing {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Syncing...")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let lastSync = iCloudSync.lastSyncDate {
+                        Text("Last synced: \(lastSync.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Text("Backs up your workouts, plans, and preferences. Keeps 1 year on device, archives older data.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Premium") {
                 Toggle("Premium Unlocked (placeholder)", isOn: $premiumUnlocked)
                 Text("Voice Mode, AI Coach enhancements, Health/Cloud sync")
@@ -180,13 +236,6 @@ struct SettingsView: View {
                 ))
                 .disabled(!premiumUnlocked)
                 Text(premiumUnlocked ? "Sync heart rate during workouts." : "Premium required to enable Health sync.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Privacy") {
-                Toggle("Analytics (local) Opt-In", isOn: $analyticsOptIn)
-                Text("Data stays on-device unless you enable sync.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -233,6 +282,16 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This will permanently delete all your workout sessions, plans, and profile data. This action cannot be undone.")
+            }
+            .alert("iCloud Sync Unavailable", isPresented: $showiCloudErrorAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("iCloud backup requires a paid Apple Developer account. Without this, data cannot be synced to iCloud. Your data remains safely stored on your device.")
+            }
+            .onChange(of: iCloudSync.syncError) { _, error in
+                if error != nil {
+                    showiCloudErrorAlert = true
+                }
             }
         }
     }
@@ -291,6 +350,31 @@ struct SettingsView: View {
         print("[SettingsView] 🔄 Reloading all widget timelines after accent color change")
         #endif
         #endif
+    }
+    
+    // MARK: - iCloud Sync Helpers
+    
+    private func enableiCloudSync() {
+        guard iCloudSyncService.isAvailable() else {
+            showiCloudUnavailableAlert = true
+            return
+        }
+        
+        iCloudSyncEnabled = true
+        
+        // Perform initial sync
+        Task {
+            do {
+                try await iCloudSync.syncAll()
+            } catch {
+                #if DEBUG
+                print("[SettingsView] Error syncing to iCloud: \(error)")
+                #endif
+                await MainActor.run {
+                    iCloudSyncEnabled = false
+                }
+            }
+        }
     }
 }
 

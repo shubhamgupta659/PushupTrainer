@@ -7,18 +7,48 @@ import SwiftUI
 
 struct RootView: View {
     @StateObject private var themeManager = ThemeManager()
+    @StateObject private var iCloudSync = iCloudSyncService.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
+    @AppStorage("hasCheckediCloudRestore") private var hasCheckediCloudRestore: Bool = false
+    
+    @State private var showICloudRestore: Bool = false
 
     var body: some View {
         Group {
             if hasCompletedOnboarding {
                 MainTabView()
+            } else if showICloudRestore && !hasCheckediCloudRestore {
+                iCloudRestoreView(
+                    onRestore: {
+                        hasCompletedOnboarding = true
+                        hasCheckediCloudRestore = true
+                    },
+                    onStartFresh: {
+                        showICloudRestore = false
+                        hasCheckediCloudRestore = true
+                    }
+                )
             } else {
                 OnboardingView(onFinish: { hasCompletedOnboarding = true })
             }
         }
         .environmentObject(themeManager)
         .preferredColorScheme(themeManager.theme.colorScheme)
+        .task {
+            // Check if we should show iCloud restore
+            if !hasCompletedOnboarding && !hasCheckediCloudRestore && iCloudSyncService.isAvailable() {
+                let store = NSUbiquitousKeyValueStore.default
+                let hasData = store.object(forKey: "icloud_profile") != nil ||
+                              store.object(forKey: "icloud_sessions") != nil ||
+                              store.object(forKey: "icloud_plan") != nil
+                
+                #if DEBUG
+                print("[RootView] iCloud available: \(iCloudSyncService.isAvailable()), has data: \(hasData)")
+                #endif
+                
+                showICloudRestore = hasData
+            }
+        }
     }
 }
 

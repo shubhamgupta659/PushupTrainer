@@ -166,7 +166,7 @@ struct MonthCalendarView: View {
                 ForEach(["S", "M", "T", "W", "T", "F", "S"], id: \.self) { day in
                     Text(day)
                         .font(.caption.bold())
-                        .foregroundStyle(.secondary)
+                                    .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -351,7 +351,7 @@ struct CalendarDayView: View {
             Text("\(calendar.component(.day, from: date))")
                 .font(.system(size: 14, weight: isToday || isSelected ? .bold : .regular))
                 .foregroundStyle(isSelected ? .white : (isToday ? accentColor : .primary))
-        }
+                                }
         .frame(width: 48, height: 48)
     }
 }
@@ -454,8 +454,8 @@ struct ActivityCard: View {
                     Button(role: .destructive, action: {
                         showDeleteConfirm = true
                     }) {
-                        Label("Delete", systemImage: "trash")
-                    }
+                                Label("Delete", systemImage: "trash")
+                            }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .foregroundStyle(.secondary)
