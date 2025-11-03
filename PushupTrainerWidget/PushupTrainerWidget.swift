@@ -12,6 +12,7 @@ struct WorkoutEntry: TimelineEntry {
     let date: Date
     let weekSummary: WeekSummary
     let recentSessions: [WorkoutSession]
+    let accentColor: Color
 }
 
 // MARK: - Week Summary Model
@@ -28,7 +29,8 @@ struct Provider: TimelineProvider {
         WorkoutEntry(
             date: Date(),
             weekSummary: WeekSummary(totalReps: 350, totalSessions: 7, averageReps: 50, currentStreak: 7),
-            recentSessions: generatePlaceholderSessions()
+            recentSessions: generatePlaceholderSessions(),
+            accentColor: loadAccentColor()
         )
     }
 
@@ -36,7 +38,8 @@ struct Provider: TimelineProvider {
         let entry = WorkoutEntry(
             date: Date(),
             weekSummary: loadWeekSummary(),
-            recentSessions: loadRecentSessions()
+            recentSessions: loadRecentSessions(),
+            accentColor: loadAccentColor()
         )
         completion(entry)
     }
@@ -46,13 +49,48 @@ struct Provider: TimelineProvider {
         let entry = WorkoutEntry(
             date: currentDate,
             weekSummary: loadWeekSummary(),
-            recentSessions: loadRecentSessions()
+            recentSessions: loadRecentSessions(),
+            accentColor: loadAccentColor()
         )
         
         // Update every 15 minutes
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
+    }
+    
+    // MARK: - Load Accent Color
+    private func loadAccentColor() -> Color {
+        // Load from App Group (shared with main app)
+        let appGroupID = "group.com.coder.ai.PushupTrainer"
+        let accentRaw: String?
+        
+        if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+            accentRaw = sharedDefaults.string(forKey: "accentColor")
+        } else {
+            accentRaw = nil
+        }
+        
+        #if DEBUG
+        print("[Widget] 🎨 Loading accent color from App Group: \(accentRaw ?? "nil")")
+        #endif
+        
+        // Map string to Color
+        switch accentRaw {
+        case "Purple": return .purple
+        case "Blue": return .blue
+        case "Green": return .green
+        case "Orange": return .orange
+        case "Pink": return .pink
+        case "Red": return .red
+        case "Teal": return .teal
+        case "Indigo": return .indigo
+        default: 
+            #if DEBUG
+            print("[Widget] ⚠️ No accent color found, using default blue")
+            #endif
+            return .blue // Default fallback
+        }
     }
     
     // MARK: - Data Loading
@@ -161,9 +199,10 @@ struct MediumWidgetView: View {
             HStack {
                 Image(systemName: "figure.strengthtraining.traditional")
                     .font(.title2)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(entry.accentColor)
                 Text("This Week")
                     .font(.headline)
+                    .foregroundStyle(colorScheme == .dark ? .white : Color(white: 0.15))
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -171,6 +210,7 @@ struct MediumWidgetView: View {
             }
             
             Divider()
+                .overlay(colorScheme == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.1))
             
             Spacer()
             
@@ -180,21 +220,24 @@ struct MediumWidgetView: View {
                     value: "\(entry.weekSummary.totalReps)",
                     label: "Total Reps",
                     icon: "number.circle.fill",
-                    color: .orange
+                    color: entry.accentColor,
+                    colorScheme: colorScheme
                 )
                 
                 StatCard(
                     value: "\(entry.weekSummary.totalSessions)",
                     label: "Workouts",
                     icon: "flame.fill",
-                    color: .orange
+                    color: entry.accentColor,
+                    colorScheme: colorScheme
                 )
                 
                 StatCard(
                     value: "\(entry.weekSummary.currentStreak)",
                     label: "Day Streak",
                     icon: "calendar.badge.checkmark",
-                    color: .green
+                    color: .green,
+                    colorScheme: colorScheme
                 )
             }
             
@@ -203,9 +246,9 @@ struct MediumWidgetView: View {
         .padding()
         .containerBackground(for: .widget) {
             ZStack {
-                (colorScheme == .dark ? Color.black : Color.white)
+                Color(uiColor: .systemBackground)
                 LinearGradient(
-                    colors: [Color.orange.opacity(0.12), Color.purple.opacity(0.12)],
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -227,6 +270,7 @@ struct LargeWidgetView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Activity Overview")
                         .font(.headline)
+                        .foregroundStyle(colorScheme == .dark ? .white : Color(white: 0.15))
                     Text("Last 7 Days")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -235,7 +279,7 @@ struct LargeWidgetView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("\(entry.weekSummary.totalReps)")
                         .font(.title.bold())
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(entry.accentColor)
                     Text("total reps")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -254,7 +298,7 @@ struct LargeWidgetView: View {
                             y: .value("Reps", reps)
                         )
                         .foregroundStyle(
-                            reps > 0 ? Color.orange.gradient : Color.gray.opacity(0.3).gradient
+                            reps > 0 ? entry.accentColor.gradient : (colorScheme == .dark ? Color.gray.opacity(0.3).gradient : Color.gray.opacity(0.2).gradient)
                         )
                         .cornerRadius(4)
                     }
@@ -263,35 +307,37 @@ struct LargeWidgetView: View {
                     AxisMarks(values: .automatic) { _ in
                         AxisValueLabel()
                             .font(.caption2)
+                            .foregroundStyle(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                     }
                 }
                 .chartYAxis {
                     AxisMarks(position: .leading) { _ in
                         AxisValueLabel()
                             .font(.caption2)
+                            .foregroundStyle(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                     }
                 }
                 .frame(maxHeight: .infinity)
             } else {
                 // Fallback for older iOS versions
-                SimplifiedBarChart(entry: entry)
+                SimplifiedBarChart(entry: entry, colorScheme: colorScheme)
             }
             
             Spacer(minLength: 4)
             
             // Quick Stats
             HStack(spacing: 8) {
-                QuickStat(icon: "flame.fill", value: "\(entry.weekSummary.totalSessions)", label: "Workouts", color: .orange)
-                QuickStat(icon: "chart.line.uptrend.xyaxis", value: "\(entry.weekSummary.averageReps)", label: "Avg Reps", color: .orange)
-                QuickStat(icon: "calendar.badge.checkmark", value: "\(entry.weekSummary.currentStreak)", label: "Streak", color: .green)
+                QuickStat(icon: "flame.fill", value: "\(entry.weekSummary.totalSessions)", label: "Workouts", color: entry.accentColor, colorScheme: colorScheme)
+                QuickStat(icon: "chart.line.uptrend.xyaxis", value: "\(entry.weekSummary.averageReps)", label: "Avg Reps", color: entry.accentColor, colorScheme: colorScheme)
+                QuickStat(icon: "calendar.badge.checkmark", value: "\(entry.weekSummary.currentStreak)", label: "Streak", color: .green, colorScheme: colorScheme)
             }
         }
         .padding(16)
         .containerBackground(for: .widget) {
             ZStack {
-                (colorScheme == .dark ? Color.black : Color.white)
+                Color(uiColor: .systemBackground)
                 LinearGradient(
-                    colors: [Color.orange.opacity(0.12), Color.purple.opacity(0.12)],
+                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -327,6 +373,7 @@ struct StatCard: View {
     let label: String
     let icon: String
     let color: Color
+    let colorScheme: ColorScheme
     
     var body: some View {
         VStack(alignment: .center, spacing: 4) {
@@ -335,7 +382,7 @@ struct StatCard: View {
                 .foregroundStyle(color)
             Text(value)
                 .font(.title2.bold())
-                .foregroundStyle(.primary)
+                .foregroundStyle(colorScheme == .dark ? .white : Color(white: 0.15))
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -349,6 +396,7 @@ struct QuickStat: View {
     let value: String
     let label: String
     let color: Color
+    let colorScheme: ColorScheme
     
     var body: some View {
         HStack(spacing: 6) {
@@ -358,6 +406,7 @@ struct QuickStat: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
                     .font(.subheadline.bold())
+                    .foregroundStyle(colorScheme == .dark ? .white : Color(white: 0.15))
                 Text(label)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -369,6 +418,7 @@ struct QuickStat: View {
 
 struct SimplifiedBarChart: View {
     var entry: Provider.Entry
+    var colorScheme: ColorScheme
     
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -379,12 +429,12 @@ struct SimplifiedBarChart: View {
                     let height = maxReps > 0 ? CGFloat(reps) / CGFloat(maxReps) * 100 : 0
                     
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(reps > 0 ? Color.orange : Color.gray.opacity(0.3))
+                        .fill(reps > 0 ? entry.accentColor : (colorScheme == .dark ? Color.gray.opacity(0.3) : Color.gray.opacity(0.2)))
                         .frame(height: max(4, height))
                     
                     Text(dayName(day))
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity)
             }

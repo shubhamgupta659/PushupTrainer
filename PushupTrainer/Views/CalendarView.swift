@@ -23,57 +23,70 @@ struct CalendarView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    // Infinite calendar months
-                    ForEach(visibleMonths, id: \.self) { month in
-                        MonthCalendarView(
-                            month: month,
-                            sessions: sessions,
-                            plan: plan,
-                            profile: profile,
-                            selectedDate: selectedDate,
-                            onDateTap: { date in
-                                selectedDate = date
-                                showDetailView = true
-                            }
-                        )
-                        .padding(.bottom, 30)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        // Infinite calendar months
+                        ForEach(visibleMonths, id: \.self) { month in
+                            MonthCalendarView(
+                                month: month,
+                                sessions: sessions,
+                                plan: plan,
+                                profile: profile,
+                                selectedDate: selectedDate,
+                                onDateTap: { date in
+                                    selectedDate = date
+                                    showDetailView = true
+                                }
+                            )
+                            .padding(.bottom, 30)
+                            .id(month) // Add ID for scrolling
+                        }
                     }
+                    .padding(.vertical)
                 }
-                .padding(.vertical)
-            }
-            .navigationTitle("Activity")
-            .background(
-                ZStack {
-                    Color(uiColor: .systemBackground)
-                    LinearGradient(
-                        colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                }
-                .ignoresSafeArea()
-            )
-            .onAppear {
-                // If initial date is provided, select it and show detail view
-                if let initialDate = initialDate {
-                    selectedDate = initialDate
-                    showDetailView = true
-                }
-                
-                sessions = SessionStore.load()
-                plan = PlanStore.load()
-                profile = ProfileStore.load()
-                // Listen for session updates
-                NotificationCenter.default.addObserver(
-                    forName: NSNotification.Name("SessionsUpdated"),
-                    object: nil,
-                    queue: .main
-                ) { _ in
+                .navigationTitle("Activity")
+                .background(
+                    ZStack {
+                        Color(uiColor: .systemBackground)
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    }
+                    .ignoresSafeArea()
+                )
+                .onAppear {
+                    // If initial date is provided, select it and show detail view
+                    if let initialDate = initialDate {
+                        selectedDate = initialDate
+                        showDetailView = true
+                    }
+                    
                     sessions = SessionStore.load()
                     plan = PlanStore.load()
                     profile = ProfileStore.load()
+                    
+                    // Scroll to current month
+                    if let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation {
+                                proxy.scrollTo(currentMonthStart, anchor: .top)
+                            }
+                        }
+                    }
+                    
+                    // Listen for session updates
+                    NotificationCenter.default.addObserver(
+                        forName: NSNotification.Name("SessionsUpdated"),
+                        object: nil,
+                        queue: .main
+                    ) { _ in
+                        sessions = SessionStore.load()
+                        plan = PlanStore.load()
+                        profile = ProfileStore.load()
+                    }
                 }
             }
             .sheet(isPresented: $showDetailView) {

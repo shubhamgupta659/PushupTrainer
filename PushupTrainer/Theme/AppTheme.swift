@@ -59,16 +59,28 @@ enum AccentColor: String, CaseIterable, Identifiable, Codable {
 final class ThemeManager: ObservableObject {
     private let themeStorageKey = "appTheme"
     private let accentStorageKey = "accentColor"
+    private let appGroupID = "group.com.coder.ai.PushupTrainer"
 
     @Published var theme: AppTheme {
         didSet { 
             UserDefaults.standard.set(theme.rawValue, forKey: themeStorageKey)
+            // Also save to App Group for widgets
+            if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                sharedDefaults.set(theme.rawValue, forKey: themeStorageKey)
+            }
         }
     }
     
     @Published var accentColor: AccentColor {
         didSet { 
             UserDefaults.standard.set(accentColor.rawValue, forKey: accentStorageKey)
+            // Also save to App Group for widgets
+            if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                sharedDefaults.set(accentColor.rawValue, forKey: accentStorageKey)
+                #if DEBUG
+                print("[ThemeManager] 💾 Saved accent color '\(accentColor.rawValue)' to App Group")
+                #endif
+            }
         }
     }
 
@@ -78,6 +90,12 @@ final class ThemeManager: ObservableObject {
         
         let accentRaw = UserDefaults.standard.string(forKey: accentStorageKey) ?? AccentColor.blue.rawValue
         accentColor = AccentColor(rawValue: accentRaw) ?? .blue
+        
+        // Ensure App Group is in sync on init
+        if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+            sharedDefaults.set(theme.rawValue, forKey: themeStorageKey)
+            sharedDefaults.set(accentColor.rawValue, forKey: accentStorageKey)
+        }
     }
 }
 

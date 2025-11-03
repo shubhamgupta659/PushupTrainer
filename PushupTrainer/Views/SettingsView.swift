@@ -5,6 +5,9 @@
 
 import SwiftUI
 import PhotosUI
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 struct SettingsView: View {
     @EnvironmentObject var themeManager: ThemeManager
@@ -89,6 +92,8 @@ struct SettingsView: View {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         themeManager.accentColor = accent
                                     }
+                                    // Reload widgets when accent color changes
+                                    reloadWidgets()
                                 }) {
                                     ZStack {
                                         Circle()
@@ -277,6 +282,15 @@ struct SettingsView: View {
         } else {
             notificationManager.scheduleIntervalReminders(intervalHours: reminderInterval)
         }
+    }
+    
+    private func reloadWidgets() {
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #if DEBUG
+        print("[SettingsView] 🔄 Reloading all widget timelines after accent color change")
+        #endif
+        #endif
     }
 }
 

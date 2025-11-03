@@ -197,7 +197,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         
         isListening = false
         lastRecognizedNumber = nil // Reset tracking when stopping
-        lastRecognitionTime = Date.distantPast
+        successText = "" // Reset success text when stopping
         
         // Clear any error message when stopping
         DispatchQueue.main.async {
@@ -206,7 +206,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     }
     
     private var lastRecognizedNumber: Int? = nil
-    private var lastRecognitionTime: Date = Date()
+    private var successText: String = "" // Tracks the text that successfully incremented the counter
 
     private func parseNumbers(from text: String) {
         // Check for stop command first
@@ -229,28 +229,47 @@ final class SpeechRecognizer: NSObject, ObservableObject {
             return
         }
 
-        // Special handling for the first number (1)
-        if lastRecognizedNumber == nil {
-            // Look for "one" or "1" at the start of text or anywhere
-            if text.lowercased().hasPrefix("one") || text.hasPrefix("1") ||
-               text.lowercased().contains(" one ") || text.contains(" 1 ") ||
-               text.lowercased().hasSuffix(" one") || text.hasSuffix(" 1") {
-                let now = Date()
-                lastRecognizedNumber = 1
-                lastRecognitionTime = now
+        #if DEBUG
+        print("[SpeechRecognizer] 📝 Full input: '\(text)'")
+        print("[SpeechRecognizer] 📋 Success text: '\(successText)'")
+        #endif
 
-                #if DEBUG
-                print("[SpeechRecognizer] ✅ Detected first number: 1")
-                #endif
-
-                DispatchQueue.main.async {
-                    self.onNumberRecognized?(1)
-                }
-                return
-            }
+        // Step 1: Remove success text from the input to get NEW speech only
+        var newText = text
+        if !successText.isEmpty && text.hasPrefix(successText) {
+            let beforeTrim = String(text.dropFirst(successText.count))
+            newText = beforeTrim.trimmingCharacters(in: .whitespacesAndNewlines)
+            #if DEBUG
+            print("[SpeechRecognizer] ✂️ After removing success text (before trim): '\(beforeTrim)'")
+            print("[SpeechRecognizer] 🆕 After trimming whitespace: '\(newText)'")
+            #endif
+        } else {
+            #if DEBUG
+            print("[SpeechRecognizer] ℹ️ No success text to remove, using full input")
+            #endif
         }
 
-        // Check for any spoken number words in the text
+        // If there's no new text, nothing to process
+        if newText.isEmpty {
+            #if DEBUG
+            print("[SpeechRecognizer] ⚠️ New text is empty after processing, skipping")
+            #endif
+            return
+        }
+
+        // Step 2: Determine what the next expected number is
+        let currentCount = lastRecognizedNumber ?? 0
+        let nextNumber = currentCount + 1
+
+        if nextNumber > 1000 {
+            return // Don't go beyond 1000
+        }
+
+        #if DEBUG
+        print("[SpeechRecognizer] 🔍 Looking for next number: \(nextNumber)")
+        #endif
+
+        // Step 3: Check if the next number is in the NEW text (as word or digit)
         let numberWords: [String: Int] = [
             "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
             "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
@@ -299,92 +318,50 @@ final class SpeechRecognizer: NSObject, ObservableObject {
             "one thousand": 1000, "thousand": 1000
         ]
 
-        // Check for any number word in the text (prioritize longer phrases first)
-        var detectedNumber: Int? = nil
-
-        // Check for compound numbers (two-word combinations) first
-        for (word, number) in numberWords {
-            if word.contains(" ") && text.lowercased().contains(word) {
-                detectedNumber = number
+        // Find the word representation(s) of the next number
+        let nextNumberWords = numberWords.filter { $0.value == nextNumber }.map { $0.key }
+        
+        var foundInNewText = false
+        
+        // Check for number words (prioritize longer phrases first)
+        let sortedWords = nextNumberWords.sorted { $0.count > $1.count }
+        for word in sortedWords {
+            if newText.lowercased().contains(word) {
+                foundInNewText = true
                 #if DEBUG
-                print("[SpeechRecognizer] ✅ Detected compound number word: '\(word)' → \(number)")
+                print("[SpeechRecognizer] ✅ Found next number as word '\(word)' in new text")
                 #endif
                 break
             }
         }
-
-        // If no compound word found, check for single words
-        if detectedNumber == nil {
-            for (word, number) in numberWords {
-                if !word.contains(" ") && text.lowercased().contains(word) {
-                    detectedNumber = number
-                    #if DEBUG
-                    print("[SpeechRecognizer] ✅ Detected number word: '\(word)' → \(number)")
-                    #endif
-                    break
-                }
-            }
-        }
-
-        // If a number word was detected, use it directly
-        if let wordNumber = detectedNumber {
-            let now = Date()
-            let timeSinceLastRecognition = now.timeIntervalSince(lastRecognitionTime)
-
-            // Only increment if enough time has passed (prevent spam)
-            if timeSinceLastRecognition > 0.3 {
-                lastRecognizedNumber = wordNumber
-                lastRecognitionTime = now
-
+        
+        // If not found as word, check as digit
+        if !foundInNewText {
+            let nextNumberString = String(nextNumber)
+            if newText.contains(nextNumberString) {
+                foundInNewText = true
                 #if DEBUG
-                print("[SpeechRecognizer] ✅ Incrementing to \(wordNumber) from spoken word")
-                #endif
-
-                DispatchQueue.main.async {
-                    self.onNumberRecognized?(wordNumber)
-                }
-            } else {
-                #if DEBUG
-                print("[SpeechRecognizer] ⏭️ Word number \(wordNumber) but too soon (\(timeSinceLastRecognition)s)")
+                print("[SpeechRecognizer] ✅ Found next number as digit '\(nextNumberString)' in new text")
                 #endif
             }
-            return
         }
 
-        // Fallback: Check for the next sequential number as digits (for cases where speech recognition creates digits)
-        let currentCount = lastRecognizedNumber ?? 0
-        let nextNumber = currentCount + 1
+        // Step 4: If found, increment and update success text to the FULL input
+        if foundInNewText {
+            lastRecognizedNumber = nextNumber
+            successText = text // The entire input becomes the new success text
+            
+            #if DEBUG
+            print("[SpeechRecognizer] ✅ SUCCESS! Incrementing to \(nextNumber)")
+            print("[SpeechRecognizer] 💾 Updated success text to: '\(successText)'")
+            #endif
 
-        if nextNumber > 1000 {
-            return // Don't go beyond 1000
-        }
-
-        // Check if the next number appears as a digit anywhere in the text
-        let nextNumberString = String(nextNumber)
-        if text.contains(nextNumberString) {
-            let now = Date()
-            let timeSinceLastRecognition = now.timeIntervalSince(lastRecognitionTime)
-
-            // Only increment if enough time has passed (prevent spam)
-            if timeSinceLastRecognition > 0.3 {
-                lastRecognizedNumber = nextNumber
-                lastRecognitionTime = now
-
-                #if DEBUG
-                print("[SpeechRecognizer] ✅ Found next digit \(nextNumber) in text, incrementing")
-                #endif
-
-                DispatchQueue.main.async {
-                    self.onNumberRecognized?(nextNumber)
-                }
-            } else {
-                #if DEBUG
-                print("[SpeechRecognizer] ⏭️ Found digit \(nextNumber) but too soon (\(timeSinceLastRecognition)s)")
-                #endif
+            DispatchQueue.main.async {
+                self.onNumberRecognized?(nextNumber)
             }
         } else {
             #if DEBUG
-            print("[SpeechRecognizer] No number words or next digit \(nextNumber) found in text")
+            print("[SpeechRecognizer] ❌ Next number \(nextNumber) not found in new text")
             #endif
         }
     }
