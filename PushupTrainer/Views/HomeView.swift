@@ -79,17 +79,64 @@ struct HomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .padding(.bottom, 8)
                         
-                        // Total Stats
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("TOTAL REPS")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Text(formattedTotalReps())
-                                .font(.system(size: 48, weight: .bold, design: .rounded))
-                                .foregroundStyle(themeManager.accentColor.color)
-                            Text(periodLabel())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        // Total Stats - Three Cards
+                        HStack(spacing: 12) {
+                            // Total Reps
+                            VStack(alignment: .center, spacing: 8) {
+                                Image(systemName: "number.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(themeManager.accentColor.color)
+                                Text(formattedTotalReps())
+                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                Text("Total Reps")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(themeManager.accentColor.color.opacity(0.1))
+                            )
+                            
+                            // Total Workouts
+                            VStack(alignment: .center, spacing: 8) {
+                                Image(systemName: "flame.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(themeManager.accentColor.color)
+                                Text("\(getTotalWorkoutsForPeriod())")
+                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                Text("Workouts")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(themeManager.accentColor.color.opacity(0.1))
+                            )
+                            
+                            // Total Calories
+                            VStack(alignment: .center, spacing: 8) {
+                                Image(systemName: "bolt.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(themeManager.accentColor.color)
+                                Text(formattedTotalCalories())
+                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                Text("Calories")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(themeManager.accentColor.color.opacity(0.1))
+                            )
                         }
                         .padding(.vertical, 4)
                         
@@ -198,6 +245,24 @@ struct HomeView: View {
     private func getTotalRepsForPeriod() -> Int {
         let filteredSessions = getFilteredSessionsForPeriod()
         return filteredSessions.reduce(0) { $0 + $1.reps }
+    }
+    
+    private func getTotalWorkoutsForPeriod() -> Int {
+        let filteredSessions = getFilteredSessionsForPeriod()
+        return filteredSessions.count
+    }
+    
+    private func getTotalCaloriesForPeriod() -> Double {
+        let filteredSessions = getFilteredSessionsForPeriod()
+        return filteredSessions.reduce(0.0) { $0 + $1.caloriesBurned }
+    }
+    
+    private func formattedTotalCalories() -> String {
+        let calories = getTotalCaloriesForPeriod()
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: calories)) ?? "0"
     }
 
     private func getFilteredSessionsForPeriod() -> [WorkoutSession] {

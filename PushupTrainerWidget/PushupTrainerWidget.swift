@@ -156,7 +156,7 @@ struct MediumWidgetView: View {
     var entry: Provider.Entry
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
                 Image(systemName: "figure.strengthtraining.traditional")
@@ -172,13 +172,15 @@ struct MediumWidgetView: View {
             
             Divider()
             
-            // Stats Grid
-            HStack(spacing: 16) {
+            Spacer()
+            
+            // Stats Grid - Centered
+            HStack(spacing: 0) {
                 StatCard(
                     value: "\(entry.weekSummary.totalReps)",
                     label: "Total Reps",
                     icon: "number.circle.fill",
-                    color: .blue
+                    color: .orange
                 )
                 
                 StatCard(
@@ -195,13 +197,15 @@ struct MediumWidgetView: View {
                     color: .green
                 )
             }
+            
+            Spacer()
         }
         .padding()
         .containerBackground(for: .widget) {
             ZStack {
                 (colorScheme == .dark ? Color.black : Color.white)
                 LinearGradient(
-                    colors: [Color.orange.opacity(0.15), Color.purple.opacity(0.15)],
+                    colors: [Color.orange.opacity(0.12), Color.purple.opacity(0.12)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -217,10 +221,10 @@ struct LargeWidgetView: View {
     var entry: Provider.Entry
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Activity Overview")
                         .font(.headline)
                     Text("Last 7 Days")
@@ -228,7 +232,7 @@ struct LargeWidgetView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 2) {
                     Text("\(entry.weekSummary.totalReps)")
                         .font(.title.bold())
                         .foregroundStyle(.orange)
@@ -237,6 +241,8 @@ struct LargeWidgetView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            
+            Spacer(minLength: 4)
             
             // Bar Chart
             if #available(iOS 16.0, *) {
@@ -265,25 +271,27 @@ struct LargeWidgetView: View {
                             .font(.caption2)
                     }
                 }
-                .frame(height: 120)
+                .frame(maxHeight: .infinity)
             } else {
                 // Fallback for older iOS versions
                 SimplifiedBarChart(entry: entry)
             }
             
+            Spacer(minLength: 4)
+            
             // Quick Stats
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 QuickStat(icon: "flame.fill", value: "\(entry.weekSummary.totalSessions)", label: "Workouts", color: .orange)
-                QuickStat(icon: "chart.line.uptrend.xyaxis", value: "\(entry.weekSummary.averageReps)", label: "Avg Reps", color: .blue)
+                QuickStat(icon: "chart.line.uptrend.xyaxis", value: "\(entry.weekSummary.averageReps)", label: "Avg Reps", color: .orange)
                 QuickStat(icon: "calendar.badge.checkmark", value: "\(entry.weekSummary.currentStreak)", label: "Streak", color: .green)
             }
         }
-        .padding()
+        .padding(16)
         .containerBackground(for: .widget) {
             ZStack {
                 (colorScheme == .dark ? Color.black : Color.white)
                 LinearGradient(
-                    colors: [Color.orange.opacity(0.15), Color.purple.opacity(0.15)],
+                    colors: [Color.orange.opacity(0.12), Color.purple.opacity(0.12)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -321,18 +329,18 @@ struct StatCard: View {
     let color: Color
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .center, spacing: 4) {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(color)
             Text(value)
                 .font(.title2.bold())
+                .foregroundStyle(.primary)
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -355,7 +363,7 @@ struct QuickStat: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -385,10 +393,15 @@ struct SimplifiedBarChart: View {
     }
     
     private func getLast7Days() -> [Date] {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday = 1
+        
+        let today = Date()
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today))!
+        
         return (0..<7).map { days in
-            calendar.date(byAdding: .day, value: -days, to: Date())!
-        }.reversed()
+            calendar.date(byAdding: .day, value: days, to: startOfWeek)!
+        }
     }
     
     private func getRepsForDay(_ day: Date) -> Int {
