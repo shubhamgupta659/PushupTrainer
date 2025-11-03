@@ -13,5 +13,9 @@
 	<string>We use Health data (heart rate and workouts) to show live stats and save your sessions to Apple Health.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>We write your workout and active energy to Apple Health when you choose to sync.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Required for voice counting mode to recognize your rep counts.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Required for voice counting mode to recognize your rep counts.</string>
 </dict>
 </plist>

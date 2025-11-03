@@ -22,8 +22,8 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
                     // Welcome screen for first-time users
                     if !hasCompletedFirstWorkout {
                         VStack(alignment: .leading, spacing: 12) {
@@ -57,7 +57,7 @@ struct HomeView: View {
                             ForEach(TimePeriod.allCases, id: \.self) { period in
                                 Button(action: { selectedPeriod = period }) {
                                     Text(period.rawValue)
-                                        .font(.headline)
+                                .font(.headline)
                                         .foregroundColor(selectedPeriod == period ? .white : .primary)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 10)
@@ -109,7 +109,7 @@ struct HomeView: View {
                             WeeklyRingView(plan: plan, selectedDate: nil)
                         }
                         .padding(.vertical, 4)
-                        
+
                         // Weekly Calories Chart
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Calories Burned")
@@ -135,7 +135,7 @@ struct HomeView: View {
                         endPoint: .bottomTrailing
                     )
                 }
-                .ignoresSafeArea()
+                    .ignoresSafeArea()
             )
             .onAppear {
                 refreshData()

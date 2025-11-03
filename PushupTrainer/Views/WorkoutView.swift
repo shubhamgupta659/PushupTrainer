@@ -24,6 +24,7 @@ final class WorkoutViewModel: ObservableObject {
     private let haptic = UINotificationFeedbackGenerator()
     private let tts = TTSCoach()
     private let health = HealthKitService.shared
+    private let speechRecognizer = SpeechRecognizer()
 
     @AppStorage("premiumUnlocked") private var premiumUnlocked: Bool = false
     @AppStorage("healthSyncEnabled") private var healthSyncEnabled: Bool = false
@@ -34,6 +35,12 @@ final class WorkoutViewModel: ObservableObject {
     @Published var isComputingRecovery: Bool = false
     private var recoveryWindowSamples: [Double] = []
     private var recoveryTimer: Timer?
+    
+    // Voice mode state
+    @Published var showPermissionAlert: Bool = false
+    @Published var permissionAlertMessage: String = ""
+    @Published var isListeningToVoice: Bool = false
+    @Published var speechError: String? = nil
 
     // Expose read-only combined flag for the View layer
     var isHealthSavingEnabled: Bool { premiumUnlocked && healthSyncEnabled }
@@ -41,6 +48,51 @@ final class WorkoutViewModel: ObservableObject {
     init() {
         let profile = ProfileStore.load()
         mode = profile?.defaultMode ?? .manual
+        
+        // Set up speech recognition callback
+        speechRecognizer.onNumberRecognized = { [weak self] number in
+            guard let self = self, self.mode == .voice, self.isRunning else { return }
+            
+            // Only accept numbers 1-1000 to avoid spurious counts
+            if number >= 1 && number <= 1000 {
+                #if DEBUG
+                print("[WorkoutViewModel] Received number: \(number), incrementing rep")
+                #endif
+                // For voice mode, increment by 1 when a number is recognized
+                // This allows natural counting: "one", "two", "three", etc.
+                // or explicit counts: "five", "ten", etc.
+                DispatchQueue.main.async {
+                    self.incrementRep()
+                }
+            }
+        }
+
+        // Set up stop command callback - this should trigger the full workout completion flow
+        speechRecognizer.onStopCommand = { [weak self] in
+            guard let self = self, self.mode == .voice, self.isRunning else { return }
+            #if DEBUG
+            print("[WorkoutViewModel] Stop command received, triggering workout finish")
+            #endif
+            // Post a notification to trigger the finish flow in the view
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: NSNotification.Name("VoiceStopCommandReceived"), object: nil)
+            }
+        }
+
+        // Listen for speech recognition errors
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SpeechRecognizerError"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let error = notification.object as? String {
+                self?.speechError = error
+            }
+        }
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     func reloadMode() {
@@ -55,6 +107,13 @@ final class WorkoutViewModel: ObservableObject {
         startDate = Date()
         isRunning = true
         haptic.prepare()
+        
+        // For voice mode, request permissions and start listening
+        if mode == .voice {
+            handleVoiceModeStart()
+            return // Voice mode start will call the rest via completion
+        }
+        
         // For manual mode, timer starts on first rep. For other modes, start immediately
         if mode != .manual {
             startTimer()
@@ -80,17 +139,85 @@ final class WorkoutViewModel: ObservableObject {
             }
         }
     }
+    
+    private func handleVoiceModeStart() {
+        // Check if already authorized
+        if speechRecognizer.isAuthorized {
+            startVoiceRecognition()
+        } else {
+            // Request permissions
+            speechRecognizer.requestAuthorization()
+            
+            // Wait a moment for authorization, then check status
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
+                if self.speechRecognizer.isAuthorized {
+                    self.startVoiceRecognition()
+                } else {
+                    // Show alert about permissions
+                    self.showPermissionAlert = true
+                    self.permissionAlertMessage = "Microphone and speech recognition permissions are required for voice mode. Please enable them in Settings."
+                    // Still allow workout to proceed but without voice recognition
+                    self.fallbackToManual()
+                }
+            }
+        }
+    }
+    
+    private func startVoiceRecognition() {
+        // For voice mode, start timer immediately
+        startTimer()
+        
+        // Start listening immediately - no TTS prompt to avoid audio session conflicts
+        speechRecognizer.startListening()
+        isListeningToVoice = true
+        
+        #if DEBUG
+        print("[Workout] Voice mode started, listening for rep counts")
+        #endif
+        
+        // Continue with health setup if applicable
+        if premiumUnlocked && healthSyncEnabled && health.isHealthDataAvailable {
+            health.requestAuthorization { [weak self] ok in
+                guard let self, ok else { return }
+                self.health.startHeartRateStreaming { bpm in
+                    DispatchQueue.main.async {
+                        self.currentHeartRateBPM = bpm
+                        self.heartRateSamples.append(bpm)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func fallbackToManual() {
+        // If voice mode fails, fall back to manual mode
+        isRunning = true
+        startTimer()
+        tts.speak("Let's crush this workout!")
+        #if DEBUG
+        print("[Workout] Voice mode failed, falling back to manual")
+        #endif
+    }
 
     func pause() {
         isRunning = false
         stopTimer()
         stopAutoIncrementTimer()
+        if mode == .voice {
+            speechRecognizer.stopListening()
+            isListeningToVoice = false
+        }
     }
 
     func stop() {
         isRunning = false
         stopTimer()
         stopAutoIncrementTimer()
+        if mode == .voice {
+            speechRecognizer.stopListening()
+            isListeningToVoice = false
+        }
         health.stopHeartRateStreaming()
     }
 
@@ -105,7 +232,10 @@ final class WorkoutViewModel: ObservableObject {
             startTimer()
         }
         
-        if reps % 10 == 0 { tts.speak("Nice! \(reps) reps!") }
+        // Only speak encouragement in non-voice modes to avoid audio session conflicts
+        if mode != .voice && reps % 10 == 0 { 
+            tts.speak("Nice! \(reps) reps!") 
+        }
     }
 
     func completeSession() -> WorkoutSession {
@@ -221,6 +351,7 @@ struct WorkoutView: View {
     @StateObject private var vm = WorkoutViewModel()
     @Environment(\.dismiss) private var dismiss
     @State private var plan: WorkoutPlan? = PlanStore.load()
+    @State private var triggerFinish = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -274,13 +405,32 @@ struct WorkoutView: View {
                     .overlay(
                         VStack(spacing: 4) {
                             if vm.reps == 0 {
-                                Text(vm.mode == .manual ? "Tap to Begin" : "Starting...")
-                                    .font(.title2.bold())
-                                    .foregroundStyle(.secondary)
+                                if vm.mode == .voice {
+                                    Text(vm.isListeningToVoice ? "Listening..." : "Starting...")
+                                        .font(.title2.bold())
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text(vm.mode == .manual ? "Tap to Begin" : "Starting...")
+                                        .font(.title2.bold())
+                                        .foregroundStyle(.secondary)
+                                }
                             } else {
                                 Text("\(vm.reps) / \(target)")
                                     .font(.system(size: 80, weight: .bold, design: .rounded))
                                     .contentTransition(.numericText())
+                            }
+                            
+                            if vm.mode == .voice && vm.isListeningToVoice {
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(.red)
+                                        .frame(width: 8, height: 8)
+                                        .opacity(0.8)
+                                    Text("Listening")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.top, 4)
                             }
                         }
                     )
@@ -337,12 +487,31 @@ struct WorkoutView: View {
             .interactiveDismissDisabled()
         }
         .overlay(alignment: .bottom) {
-            if vm.isComputingRecovery {
-                Text("Computing recovery (60s)…")
-                    .padding(10)
-                    .glass(cornerRadius: 12)
-                    .padding(.bottom, 12)
+            VStack(spacing: 8) {
+                if vm.isComputingRecovery {
+                    Text("Computing recovery (60s)…")
+                        .padding(10)
+                        .glass(cornerRadius: 12)
+                }
+                if let error = vm.speechError, vm.mode == .voice {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(8)
+                        .glass(cornerRadius: 12)
+                }
             }
+            .padding(.bottom, 12)
+        }
+        .alert("Permissions Required", isPresented: $vm.showPermissionAlert) {
+            Button("Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(vm.permissionAlertMessage)
         }
         .overlay(alignment: .bottomLeading) {
             Button(action: { vm.isRunning ? vm.pause() : vm.start() }) {
@@ -357,21 +526,7 @@ struct WorkoutView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             Button(action: {
-                guard !vm.isComputingRecovery else { return }
-                vm.finishWithRecovery { session in
-                    // Only save session if there are actual reps
-                    if session.reps > 0 {
-                        if vm.isHealthSavingEnabled { HealthKitService.shared.saveWorkout(session: session) }
-                        var all = SessionStore.load()
-                        all.append(session)
-                        SessionStore.save(all)
-                        // Notify that sessions have been updated
-                        NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)
-                        // Handle notification logic for workout completion
-                        NotificationManager.shared.onWorkoutCompleted()
-                    }
-                    dismiss()
-                }
+                triggerFinish = true
             }) {
                 Image(systemName: vm.isComputingRecovery ? "hourglass" : "stop.fill")
                     .font(.title3)
@@ -382,6 +537,33 @@ struct WorkoutView: View {
             .padding(.trailing, 20)
             .padding(.bottom, 80)
             .disabled(vm.isComputingRecovery)
+        }
+        .onChange(of: triggerFinish) { newValue in
+            guard newValue else { return }
+            guard !vm.isComputingRecovery else { 
+                triggerFinish = false
+                return 
+            }
+            
+            vm.finishWithRecovery { session in
+                // Only save session if there are actual reps
+                if session.reps > 0 {
+                    if vm.isHealthSavingEnabled { HealthKitService.shared.saveWorkout(session: session) }
+                    var all = SessionStore.load()
+                    all.append(session)
+                    SessionStore.save(all)
+                    // Notify that sessions have been updated
+                    NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)
+                    // Handle notification logic for workout completion
+                    NotificationManager.shared.onWorkoutCompleted()
+                }
+                dismiss()
+            }
+            triggerFinish = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("VoiceStopCommandReceived"))) { _ in
+            // Trigger the same finish flow when voice stop command is received
+            triggerFinish = true
         }
     }
 

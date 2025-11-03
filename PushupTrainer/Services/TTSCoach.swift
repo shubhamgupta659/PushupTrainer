@@ -41,6 +41,18 @@ final class TTSCoach {
         utterance.volume = 1.0
         synthesizer.speak(utterance)
     }
+    
+    func deactivateAfterSpeaking() {
+        // Deactivate TTS audio session after speaking to allow speech recognition
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            do {
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {
+                print("[TTS] Failed to deactivate audio session: \(error)")
+            }
+        }
+    }
 }
 
 

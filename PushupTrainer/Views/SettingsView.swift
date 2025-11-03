@@ -73,6 +73,7 @@ struct SettingsView: View {
                             Text(t.displayName).tag(t)
                         }
                     }
+                    .id("theme-picker-\(themeManager.accentColor.rawValue)")
                     
                     // Accent Color Picker
                     VStack(alignment: .leading, spacing: 8) {
@@ -121,18 +122,24 @@ struct SettingsView: View {
                                 Text(type.rawValue).tag(type.rawValue)
                             }
                         }
+                        .id("reminder-type-picker-\(themeManager.accentColor.rawValue)")
                         .onChange(of: reminderTypeRaw) { _, _ in
                             scheduleNotifications()
                         }
                         
                         if reminderType == .specificTime {
-                            DatePicker("Reminder Time", selection: reminderTime, displayedComponents: .hourAndMinute)
-                                .onChange(of: reminderHour) { _, _ in
-                                    scheduleNotifications()
-                                }
-                                .onChange(of: reminderMinute) { _, _ in
-                                    scheduleNotifications()
-                                }
+                            HStack {
+                                Text("Reminder Time")
+                                Spacer()
+                                DatePicker("", selection: reminderTime, displayedComponents: .hourAndMinute)
+                                    .labelsHidden()
+                                    .onChange(of: reminderHour) { _, _ in
+                                        scheduleNotifications()
+                                    }
+                                    .onChange(of: reminderMinute) { _, _ in
+                                        scheduleNotifications()
+                                    }
+                            }
                             
                         } else {
                             Picker("Reminder Interval", selection: $reminderInterval) {
@@ -140,6 +147,7 @@ struct SettingsView: View {
                                 Text("Every 6 hours").tag(6)
                                 Text("Every 8 hours").tag(8)
                             }
+                            .id("reminder-interval-picker-\(themeManager.accentColor.rawValue)")
                             .onChange(of: reminderInterval) { _, _ in
                                 scheduleNotifications()
                             }
@@ -182,6 +190,7 @@ struct SettingsView: View {
                 }
             }
             }
+            .tint(themeManager.accentColor.color)
             .navigationTitle("Settings")
             .defaultScrollAnchor(.top)
             .scrollContentBackground(.hidden)
