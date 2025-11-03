@@ -4,6 +4,9 @@
 //
 
 import Foundation
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
     case manual, timer, voice
@@ -16,6 +19,10 @@ enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
         case .timer: return "Timer"
         case .voice: return "Voice"
         }
+    }
+    
+    var displayName: String {
+        label
     }
     
     var iconName: String {
@@ -58,6 +65,7 @@ struct WorkoutSession: Codable, Identifiable, Equatable {
 
 enum SessionStore {
     private static let key = "workoutSessions"
+    private static let appGroupID = "group.com.coder.ai.PushupTrainer"
 
     static func load() -> [WorkoutSession] {
         guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
@@ -66,7 +74,23 @@ enum SessionStore {
 
     static func save(_ sessions: [WorkoutSession]) {
         if let data = try? JSONEncoder().encode(sessions) {
+            // Save to main app UserDefaults
             UserDefaults.standard.set(data, forKey: key)
+            
+            // Also save to shared UserDefaults for widgets
+            if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                sharedDefaults.set(data, forKey: key)
+                sharedDefaults.synchronize()
+                
+                #if DEBUG
+                print("[SessionStore] Saved \(sessions.count) sessions to App Group")
+                #endif
+                
+                // Notify widgets to reload
+                #if canImport(WidgetKit)
+                WidgetCenter.shared.reloadAllTimelines()
+                #endif
+            }
         }
     }
 }

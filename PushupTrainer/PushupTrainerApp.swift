@@ -34,6 +34,27 @@ struct PushupTrainerApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
+        }
+    }
+    
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "pushuptrainer" else { return }
+        
+        switch url.host {
+        case "home":
+            // Navigate to home tab
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToTab"), object: 0)
+        case "workout":
+            // Navigate to workout tab
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToTab"), object: 1)
+        case "activity":
+            // Navigate to activity tab
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToTab"), object: 3)
+        default:
+            break
         }
     }
 }

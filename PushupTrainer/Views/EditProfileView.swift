@@ -108,16 +108,6 @@ struct EditProfileView: View {
                     }
                 }
 
-                Section("Workout Preferences") {
-                    Picker("Default Mode", selection: Binding(
-                        get: { p.defaultMode ?? .manual },
-                        set: { newVal in p.defaultMode = newVal; profile = p; ProfileStore.save(p) }
-                    )) {
-                        Text("Manual").tag(WorkoutMode.manual)
-                        Text("Timer").tag(WorkoutMode.timer)
-                        Text("Voice").tag(WorkoutMode.voice)
-                    }
-                }
             }
         }
         .navigationTitle("Edit Profile")

@@ -18,6 +18,7 @@ struct OnboardingView: View {
     @State private var currentMax: String = "10"
     @State private var targetDays: String = "45"
     @State private var planStyle: PlanStyle = .linear
+    @State private var workoutMode: WorkoutMode = .manual
     @State private var heightUnit: Units.HeightUnit = .cm
     @State private var weightUnit: Units.WeightUnit = .kg
     @State private var avatarSelection: PhotosPickerItem? = nil
@@ -126,6 +127,66 @@ struct OnboardingView: View {
                         .pickerStyle(.menu)
                     }
                     .padding().glass()
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Preferred Workout Mode")
+                            .font(.headline)
+                        
+                        Text("Choose how you'd like to track your push-ups during workouts.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        VStack(spacing: 8) {
+                            ForEach(WorkoutMode.allCases, id: \.rawValue) { mode in
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        workoutMode = mode
+                                    }
+                                }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: mode == .manual ? "hand.tap.fill" : mode == .timer ? "timer" : "mic.fill")
+                                            .font(.title3)
+                                            .frame(width: 28)
+                                            .foregroundStyle(workoutMode == mode ? themeManager.accentColor.color : .secondary)
+                                        
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(mode.displayName)
+                                                .font(.subheadline.bold())
+                                                .foregroundStyle(workoutMode == mode ? themeManager.accentColor.color : .primary)
+                                            
+                                            Text(mode.description)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .multilineTextAlignment(.leading)
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        if workoutMode == mode {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(themeManager.accentColor.color)
+                                                .font(.title3)
+                                        } else {
+                                            Circle()
+                                                .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
+                                                .frame(width: 24, height: 24)
+                                        }
+                                    }
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(workoutMode == mode ? themeManager.accentColor.color.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .strokeBorder(workoutMode == mode ? themeManager.accentColor.color.opacity(0.5) : Color.clear, lineWidth: 2)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding().glass()
                 }
 
                 // Policy / Agreement
@@ -207,12 +268,15 @@ struct OnboardingView: View {
             currentMaxPushups: Int(currentMax) ?? 0,
             units: Units(height: heightUnit, weight: weightUnit),
             avatarImageData: avatarData,
-            defaultMode: .manual,
+            defaultMode: workoutMode,
             createdAt: now,
             updatedAt: now,
             onboardingDate: now
         )
         ProfileStore.save(profile)
+        
+        // Save preferred workout mode to AppStorage
+        UserDefaults.standard.set(workoutMode.rawValue, forKey: "preferredWorkoutMode")
         
         // Generate initial workout plan based on selected style
         guard let tgt = Int(targetReps), let cur = Int(currentMax), let days = Int(targetDays) else { return }

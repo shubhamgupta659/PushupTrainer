@@ -52,6 +52,13 @@ struct MainTabView: View {
                 .tag(4)
         }
         .tint(tintColor)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToTab"))) { notification in
+            if let tabIndex = notification.object as? Int {
+                withAnimation {
+                    selectedTab = tabIndex
+                }
+            }
+        }
         .onAppear {
             tintColor = themeManager.accentColor.color
         }

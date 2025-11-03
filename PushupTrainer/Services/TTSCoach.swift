@@ -53,6 +53,13 @@ final class TTSCoach {
             }
         }
     }
+    
+    func stopSpeaking() {
+        // Stop any ongoing speech
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+    }
 }
 
 

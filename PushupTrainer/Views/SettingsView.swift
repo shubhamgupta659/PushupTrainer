@@ -21,7 +21,9 @@ struct SettingsView: View {
     @AppStorage("reminderHour") private var reminderHour: Int = 18
     @AppStorage("reminderMinute") private var reminderMinute: Int = 0
     @AppStorage("reminderInterval") private var reminderInterval: Int = 4
+    @AppStorage("preferredWorkoutMode") private var preferredWorkoutModeRaw: String = WorkoutMode.manual.rawValue
     @State private var showNotificationPermissionAlert = false
+    @State private var showResetConfirmation = false
     
     private var reminderType: ReminderType {
         ReminderType(rawValue: reminderTypeRaw) ?? .specificTime
@@ -185,7 +187,7 @@ struct SettingsView: View {
             }
 
             Section("Data") {
-                Button(role: .destructive, action: resetAllData) {
+                Button(role: .destructive, action: { showResetConfirmation = true }) {
                     Label("Reset All Data", systemImage: "trash")
                 }
             }
@@ -219,6 +221,14 @@ struct SettingsView: View {
             } message: {
                 Text("Please enable notifications in Settings to receive workout reminders.")
             }
+            .alert("Reset All Data?", isPresented: $showResetConfirmation) {
+                Button("Reset", role: .destructive) {
+                    resetAllData()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete all your workout sessions, plans, and profile data. This action cannot be undone.")
+            }
         }
     }
 
@@ -227,6 +237,7 @@ struct SettingsView: View {
         PlanStore.delete()
         UserDefaults.standard.removeObject(forKey: "userProfile")
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        UserDefaults.standard.set(WorkoutMode.manual.rawValue, forKey: "preferredWorkoutMode")
         notificationManager.cancelAllReminders()
         notificationsEnabled = false
         profile = nil

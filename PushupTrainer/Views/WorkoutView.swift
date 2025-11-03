@@ -28,6 +28,7 @@ final class WorkoutViewModel: ObservableObject {
 
     @AppStorage("premiumUnlocked") private var premiumUnlocked: Bool = false
     @AppStorage("healthSyncEnabled") private var healthSyncEnabled: Bool = false
+    @AppStorage("preferredWorkoutMode") private var preferredWorkoutMode: String = WorkoutMode.manual.rawValue
 
     // Heart rate live and stats
     @Published var currentHeartRateBPM: Double? = nil
@@ -46,8 +47,14 @@ final class WorkoutViewModel: ObservableObject {
     var isHealthSavingEnabled: Bool { premiumUnlocked && healthSyncEnabled }
 
     init() {
-        let profile = ProfileStore.load()
-        mode = profile?.defaultMode ?? .manual
+        // Load preferred workout mode from AppStorage
+        if let savedMode = WorkoutMode(rawValue: preferredWorkoutMode) {
+            mode = savedMode
+        } else {
+            // Fallback to profile or manual
+            let profile = ProfileStore.load()
+            mode = profile?.defaultMode ?? .manual
+        }
         
         // Set up speech recognition callback
         speechRecognizer.onNumberRecognized = { [weak self] number in
@@ -96,8 +103,14 @@ final class WorkoutViewModel: ObservableObject {
     }
     
     func reloadMode() {
-        let profile = ProfileStore.load()
-        mode = profile?.defaultMode ?? .manual
+        // Load from AppStorage (preferred mode that was last used)
+        if let savedMode = WorkoutMode(rawValue: preferredWorkoutMode) {
+            mode = savedMode
+        } else {
+            // Fallback to profile or manual
+            let profile = ProfileStore.load()
+            mode = profile?.defaultMode ?? .manual
+        }
     }
 
     func start() {
@@ -107,6 +120,9 @@ final class WorkoutViewModel: ObservableObject {
         startDate = Date()
         isRunning = true
         haptic.prepare()
+        
+        // Persist the workout mode preference when workout starts
+        preferredWorkoutMode = mode.rawValue
         
         // For voice mode, request permissions and start listening
         if mode == .voice {
@@ -662,9 +678,14 @@ struct PlanPreviewSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Start Workout") { onStart(selectedIndex, selectedTarget, selectedMode) } }
             }
             .onAppear {
-                // Load default mode from profile
-                if let profile = ProfileStore.load() {
+                // Load preferred mode from AppStorage (last used mode)
+                let preferredModeRaw = UserDefaults.standard.string(forKey: "preferredWorkoutMode") ?? WorkoutMode.manual.rawValue
+                if let savedMode = WorkoutMode(rawValue: preferredModeRaw) {
+                    selectedMode = savedMode
+                } else if let profile = ProfileStore.load() {
                     selectedMode = profile.defaultMode ?? .manual
+                } else {
+                    selectedMode = .manual
                 }
                 
                 // Auto-select the first incomplete day after the last completed day

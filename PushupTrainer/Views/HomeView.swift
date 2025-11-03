@@ -4,6 +4,9 @@
 //
 
 import SwiftUI
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 struct HomeView: View {
     @EnvironmentObject var themeManager: ThemeManager
@@ -12,6 +15,7 @@ struct HomeView: View {
     @State private var plan: WorkoutPlan? = PlanStore.load()
     @State private var selectedPeriod: TimePeriod = .day
     @AppStorage("hasCompletedFirstWorkout") private var hasCompletedFirstWorkout: Bool = false
+    
     
     enum TimePeriod: String, CaseIterable {
         case day = "D"
