@@ -47,6 +47,8 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         // Welcome message with username
+                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
                         Text(welcomeText())
                             .font(.title2.bold())
                             .padding(.vertical, 8)
@@ -55,7 +57,9 @@ struct HomeView: View {
                         Text("Activity Overview")
                             .font(.largeTitle.bold())
                             .padding(.bottom, 4)
-                        
+                        }
+                        .padding(.top, 60)
+                                
                         // Period Selector
                         HStack(spacing: 0) {
                             ForEach(TimePeriod.allCases, id: \.self) { period in
@@ -77,7 +81,6 @@ struct HomeView: View {
                         .padding(4)
                         .background(Color.gray.opacity(0.2))
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .padding(.bottom, 8)
                         
                         // Total Stats - Three Cards
                         HStack(spacing: 12) {
@@ -176,9 +179,12 @@ struct HomeView: View {
                         }
                         .padding(.vertical, 4)
                     }
+                    }
+                    
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
-                .padding(.bottom, 100) // Extra padding for floating button
+                .padding(.bottom, 20) // Extra padding for floating button
             }
             .defaultScrollAnchor(.top)
             .navigationBarTitleDisplayMode(.inline)
@@ -668,7 +674,7 @@ struct WeeklyRingView: View {
         let profile = ProfileStore.load()
         let accentColor = themeManager.accentColor.color
         
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
             ForEach(Array(weekDays.enumerated()), id: \.offset) { index, day in
                 VStack(spacing: 4) {
                     // Day label
@@ -712,7 +718,7 @@ struct WeeklyRingView: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .padding(12)
+        .padding(10)
         .background(Color.gray.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .id(refreshTrigger)
@@ -961,7 +967,7 @@ struct WeeklyCaloriesChart: View {
                 }
             }
         }
-        .padding(12)
+        .padding(.vertical, 10)
         .background(Color.gray.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
