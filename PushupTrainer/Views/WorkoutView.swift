@@ -25,6 +25,7 @@ final class WorkoutViewModel: ObservableObject {
     private let tts = TTSCoach()
     private let health = HealthKitService.shared
     private let speechRecognizer = SpeechRecognizer()
+    private var cancellables = Set<AnyCancellable>()
 
     @AppStorage("premiumUnlocked") private var premiumUnlocked: Bool = false
     @AppStorage("healthSyncEnabled") private var healthSyncEnabled: Bool = false
@@ -42,6 +43,8 @@ final class WorkoutViewModel: ObservableObject {
     @Published var permissionAlertMessage: String = ""
     @Published var isListeningToVoice: Bool = false
     @Published var speechError: String? = nil
+    @Published var isUsingBluetooth: Bool = false
+    @Published var currentInputName: String? = nil
 
     // Expose read-only combined flag for the View layer
     var isHealthSavingEnabled: Bool { premiumUnlocked && healthSyncEnabled }
@@ -58,27 +61,55 @@ final class WorkoutViewModel: ObservableObject {
         
         // Set up speech recognition callback
         speechRecognizer.onNumberRecognized = { [weak self] number in
-            guard let self = self, self.mode == .voice, self.isRunning else { return }
+            #if DEBUG
+            print("[WorkoutViewModel] 🔔 onNumberRecognized callback received: \(number)")
+            print("[WorkoutViewModel] - self exists: \(self != nil)")
+            print("[WorkoutViewModel] - mode: \(self?.mode.rawValue ?? "nil")")
+            print("[WorkoutViewModel] - isRunning: \(self?.isRunning ?? false)")
+            #endif
+            
+            guard let self = self, self.mode == .voice else {
+                #if DEBUG
+                print("[WorkoutViewModel] ❌ Guard failed - not in voice mode")
+                #endif
+                return
+            }
+            
+            // In voice mode, only count when workout is running
+            // When paused, numbers are detected but not counted (state not updated in recognizer)
+            guard self.isRunning else {
+                #if DEBUG
+                print("[WorkoutViewModel] ⏸️ Workout is paused, ignoring number \(number) - not counting")
+                #endif
+                return
+            }
             
             // Only accept numbers 1-1000 to avoid spurious counts
             if number >= 1 && number <= 1000 {
                 #if DEBUG
-                print("[WorkoutViewModel] Received number: \(number), incrementing rep")
+                print("[WorkoutViewModel] ✅ Received valid number: \(number), incrementing rep")
                 #endif
                 // For voice mode, increment by 1 when a number is recognized
                 // This allows natural counting: "one", "two", "three", etc.
                 // or explicit counts: "five", "ten", etc.
                 DispatchQueue.main.async {
                     self.incrementRep()
+                    #if DEBUG
+                    print("[WorkoutViewModel] ✅ Rep incremented, new count: \(self.reps)")
+                    #endif
                 }
+            } else {
+                #if DEBUG
+                print("[WorkoutViewModel] ❌ Number out of range: \(number)")
+                #endif
             }
         }
 
         // Set up stop command callback - this should trigger the full workout completion flow
         speechRecognizer.onStopCommand = { [weak self] in
-            guard let self = self, self.mode == .voice, self.isRunning else { return }
+            guard let self = self, self.mode == .voice else { return }
             #if DEBUG
-            print("[WorkoutViewModel] Stop command received, triggering workout finish")
+            print("[WorkoutViewModel] 🛑 Voice stop command received")
             #endif
             // Post a notification to trigger the finish flow in the view
             DispatchQueue.main.async {
@@ -96,10 +127,28 @@ final class WorkoutViewModel: ObservableObject {
                 self?.speechError = error
             }
         }
+        
+        // Sync Bluetooth status from speech recognizer
+        speechRecognizer.$isUsingBluetooth
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isBluetooth in
+                self?.isUsingBluetooth = isBluetooth
+            }
+            .store(in: &cancellables)
+        
+        // Sync input name from speech recognizer
+        speechRecognizer.$currentInputName
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] inputName in
+                self?.currentInputName = inputName
+            }
+            .store(in: &cancellables)
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        // Ensure speech recognizer is fully stopped and cleared
+        speechRecognizer.stopListening()
     }
     
     func reloadMode() {
@@ -220,9 +269,29 @@ final class WorkoutViewModel: ObservableObject {
         isRunning = false
         stopTimer()
         stopAutoIncrementTimer()
+        // DON'T stop listening in voice mode - keep listening for resume/stop commands
+        // Just pause the timer and ignore number state updates (but keep listening for commands)
         if mode == .voice {
-            speechRecognizer.stopListening()
-            isListeningToVoice = false
+            speechRecognizer.setIgnoreNumbers(true)
+            #if DEBUG
+            print("[WorkoutViewModel] ⏸️ Paused (listening continues, numbers ignored)")
+            #endif
+        }
+    }
+    
+    func resume() {
+        guard !isRunning else { return }
+        isRunning = true
+        startTimer()
+        if mode == .timer {
+            startAutoIncrementTimer()
+        }
+        // Voice mode stays listening throughout, re-enable number state updates
+        if mode == .voice {
+            speechRecognizer.setIgnoreNumbers(false)
+            #if DEBUG
+            print("[WorkoutViewModel] ▶️ Resumed (counting re-enabled, listening continued)")
+            #endif
         }
     }
 
@@ -230,15 +299,26 @@ final class WorkoutViewModel: ObservableObject {
         isRunning = false
         stopTimer()
         stopAutoIncrementTimer()
+        // Only stop listening when workout is truly stopped
         if mode == .voice {
             speechRecognizer.stopListening()
             isListeningToVoice = false
+            #if DEBUG
+            print("[WorkoutViewModel] 🛑 Stopped workout, stopped listening")
+            #endif
         }
         health.stopHeartRateStreaming()
     }
 
     func incrementRep() {
-        guard isRunning else { return }
+        // Only count reps when workout is running (for all modes)
+        guard isRunning else {
+            #if DEBUG
+            print("[WorkoutViewModel] ⏸️ incrementRep called but workout is paused, not counting")
+            #endif
+            return
+        }
+        
         reps += 1
         timestamps.append(Date())
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
@@ -252,6 +332,10 @@ final class WorkoutViewModel: ObservableObject {
         if mode != .voice && reps % 10 == 0 { 
             tts.speak("Nice! \(reps) reps!") 
         }
+        
+        #if DEBUG
+        print("[WorkoutViewModel] Rep incremented to \(reps), isRunning: \(isRunning)")
+        #endif
     }
 
     func completeSession() -> WorkoutSession {
@@ -289,6 +373,16 @@ final class WorkoutViewModel: ObservableObject {
             completion(session)
             return
         }
+        
+        // Skip recovery if user explicitly stopped - just complete immediately
+        // Recovery is only useful when workout naturally completes
+        let session = completeSession()
+        markPlanDayComplete()
+        completion(session)
+        return
+        
+        // Original recovery logic (commented out for now - can be re-enabled if needed)
+        /*
         isComputingRecovery = true
         recoveryWindowSamples = []
         let endSnapshot = Date()
@@ -309,6 +403,7 @@ final class WorkoutViewModel: ObservableObject {
             }
         }
         RunLoop.main.add(recoveryTimer!, forMode: .common)
+        */
     }
 
     private func markPlanDayComplete() {
@@ -422,11 +517,17 @@ struct WorkoutView: View {
                         VStack(spacing: 4) {
                             if vm.reps == 0 {
                                 if vm.mode == .voice {
-                                    Text(vm.isListeningToVoice ? "Listening..." : "Starting...")
-                                        .font(.title2.bold())
-                                        .foregroundStyle(.secondary)
+                                    if !vm.isRunning {
+                                        Text("Paused")
+                                            .font(.title2.bold())
+                                            .foregroundStyle(.secondary)
+                                    } else {
+                                        Text(vm.isListeningToVoice ? "Listening..." : "Starting...")
+                                            .font(.title2.bold())
+                                            .foregroundStyle(.secondary)
+                                    }
                                 } else {
-                                    Text(vm.mode == .manual ? "Tap to Begin" : "Starting...")
+                                    Text(vm.mode == .manual ? "Tap to Begin" : (!vm.isRunning ? "Paused" : "Starting..."))
                                         .font(.title2.bold())
                                         .foregroundStyle(.secondary)
                                 }
@@ -436,17 +537,29 @@ struct WorkoutView: View {
                                     .contentTransition(.numericText())
                             }
                             
-                            if vm.mode == .voice && vm.isListeningToVoice {
+                            // Show AirPods/Bluetooth connection status
+                            if vm.mode == .voice && vm.isUsingBluetooth {
                                 HStack(spacing: 4) {
-                                    Circle()
-                                        .fill(.red)
-                                        .frame(width: 8, height: 8)
-                                        .opacity(0.8)
-                                    Text("Listening")
+                                    Image(systemName: "airpods")
+                                        .font(.caption)
+                                        .foregroundStyle(.blue)
+                                    if let inputName = vm.currentInputName {
+                                        Text(inputName)
+                                            .font(.caption)
+                                            .foregroundStyle(.blue)
+                                    }
+                                }
+                                .padding(.top, 2)
+                            } else if vm.mode == .voice && vm.isListeningToVoice {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "mic.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text("iPhone Mic")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
-                                .padding(.top, 4)
+                                .padding(.top, 2)
                             }
                         }
                     )
@@ -530,7 +643,13 @@ struct WorkoutView: View {
             Text(vm.permissionAlertMessage)
         }
         .overlay(alignment: .bottomLeading) {
-            Button(action: { vm.isRunning ? vm.pause() : vm.start() }) {
+            Button(action: { 
+                if vm.isRunning {
+                    vm.pause()
+                } else {
+                    vm.resume()
+                }
+            }) {
                 Image(systemName: vm.isRunning ? "pause.fill" : "play.fill")
                     .font(.title3)
                     .padding(16)
@@ -561,19 +680,38 @@ struct WorkoutView: View {
                 return 
             }
             
+            // Clear any speech errors when stopping
+            vm.speechError = nil
+            
+            #if DEBUG
+            print("[WorkoutView] 🛑 Stop button pressed, finishing workout with \(vm.reps) reps")
+            #endif
+            
             vm.finishWithRecovery { session in
+                #if DEBUG
+                print("[WorkoutView] 💾 finishWithRecovery completion called with \(session.reps) reps")
+                #endif
+                
                 // Only save session if there are actual reps
                 if session.reps > 0 {
-                    if vm.isHealthSavingEnabled { HealthKitService.shared.saveWorkout(session: session) }
+                    if vm.isHealthSavingEnabled { HealthKitService.shared.saveWorkout(session: session) }                                                       
                     var all = SessionStore.load()
                     all.append(session)
                     SessionStore.save(all)
                     // Notify that sessions have been updated
-                    NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)
+                    NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)                                                  
                     // Handle notification logic for workout completion
                     NotificationManager.shared.onWorkoutCompleted()
+                    #if DEBUG
+                    print("[WorkoutView] ✅ Session saved")
+                    #endif
                 }
-                dismiss()
+                
+                #if DEBUG
+                print("[WorkoutView] 🏠 Navigating to home screen")
+                #endif
+                // Navigate to home tab (WorkoutView is in a TabView, not presented modally)
+                NotificationCenter.default.post(name: NSNotification.Name("NavigateHome"), object: nil)
             }
             triggerFinish = false
         }

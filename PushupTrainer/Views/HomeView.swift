@@ -58,7 +58,6 @@ struct HomeView: View {
                             .font(.largeTitle.bold())
                             .padding(.bottom, 4)
                         }
-                        .padding(.top, 60)
                                 
                         // Period Selector
                         HStack(spacing: 0) {
@@ -674,7 +673,7 @@ struct WeeklyRingView: View {
         let profile = ProfileStore.load()
         let accentColor = themeManager.accentColor.color
         
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             ForEach(Array(weekDays.enumerated()), id: \.offset) { index, day in
                 VStack(spacing: 4) {
                     // Day label
@@ -718,7 +717,8 @@ struct WeeklyRingView: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .padding(10)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 5)
         .background(Color.gray.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .id(refreshTrigger)
