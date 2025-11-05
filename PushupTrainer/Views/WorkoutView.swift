@@ -38,6 +38,11 @@ final class WorkoutViewModel: ObservableObject {
     private var recoveryWindowSamples: [Double] = []
     private var recoveryTimer: Timer?
     
+    // iOS 17+ Live Workout Manager
+    private var liveWorkoutManager: AnyObject? // Will be LiveWorkoutManager on iOS 17+
+    private var heartRateCancellable: AnyCancellable?
+    private var isUsingLiveWorkout: Bool = false
+    
     // Voice mode state
     @Published var showPermissionAlert: Bool = false
     @Published var permissionAlertMessage: String = ""
@@ -190,18 +195,82 @@ final class WorkoutViewModel: ObservableObject {
         tts.speak("Let's crush this workout!")
         #if DEBUG
         print("[Workout] start: target=\(selectedTargetReps ?? -1), mode=\(mode.rawValue)")
+        print("[WorkoutViewModel] 💊 Premium: \(premiumUnlocked), Health Sync: \(healthSyncEnabled), Health Available: \(health.isHealthDataAvailable)")
         #endif
 
         if premiumUnlocked && healthSyncEnabled && health.isHealthDataAvailable {
-            health.requestAuthorization { [weak self] ok in
-                guard let self, ok else { return }
-                self.health.startHeartRateStreaming { bpm in
-                    DispatchQueue.main.async {
-                        self.currentHeartRateBPM = bpm
-                        self.heartRateSamples.append(bpm)
+            #if DEBUG
+            print("[WorkoutViewModel] 🚀 Starting HealthKit setup...")
+            #endif
+            
+            // Check current authorization status first
+            let (readAuth, writeAuth) = health.checkAuthorizationStatus()
+            #if DEBUG
+            print("[WorkoutViewModel] 📊 Current authorization - Read: \(readAuth), Write: \(writeAuth)")
+            #endif
+            
+            // If read authorization is already granted, start streaming directly
+            if readAuth {
+                #if DEBUG
+                print("[WorkoutViewModel] ✅ Read authorization already granted, starting heart rate streaming")
+                #endif
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.health.startHeartRateStreaming { bpm in
+                        DispatchQueue.main.async {
+                            #if DEBUG
+                            print("[WorkoutViewModel] 💓 Received heart rate update: \(Int(bpm)) bpm")
+                            #endif
+                            self.currentHeartRateBPM = bpm
+                            self.heartRateSamples.append(bpm)
+                        }
+                    }
+                }
+            } else {
+                // Request authorization and start streaming
+                health.requestAuthorization { [weak self] ok in
+                    #if DEBUG
+                    print("[WorkoutViewModel] 📞 Authorization callback received: \(ok)")
+                    #endif
+                    
+                    guard let self else { return }
+                    
+                    // Check actual status after callback
+                    let (newReadAuth, _) = self.health.checkAuthorizationStatus()
+                    #if DEBUG
+                    print("[WorkoutViewModel] 📊 Authorization after callback - Read: \(newReadAuth)")
+                    #endif
+                    
+                    if newReadAuth {
+                        #if DEBUG
+                        print("[WorkoutViewModel] ✅ HealthKit authorized, starting heart rate streaming")
+                        #endif
+                        
+                        // Small delay to ensure authorization is fully processed
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            self.health.startHeartRateStreaming { bpm in
+                                DispatchQueue.main.async {
+                                    #if DEBUG
+                                    print("[WorkoutViewModel] 💓 Received heart rate update: \(Int(bpm)) bpm")
+                                    #endif
+                                    self.currentHeartRateBPM = bpm
+                                    self.heartRateSamples.append(bpm)
+                                }
+                            }
+                        }
+                    } else {
+                        #if DEBUG
+                        print("[WorkoutViewModel] ❌ HealthKit authorization still denied")
+                        #endif
                     }
                 }
             }
+        } else {
+            #if DEBUG
+            print("[WorkoutViewModel] ⚠️ HealthKit not enabled:")
+            print("[WorkoutViewModel]   - Premium: \(premiumUnlocked)")
+            print("[WorkoutViewModel]   - Health Sync: \(healthSyncEnabled)")
+            print("[WorkoutViewModel]   - Health Available: \(health.isHealthDataAvailable)")
+            #endif
         }
     }
     
@@ -243,15 +312,75 @@ final class WorkoutViewModel: ObservableObject {
         
         // Continue with health setup if applicable
         if premiumUnlocked && healthSyncEnabled && health.isHealthDataAvailable {
-            health.requestAuthorization { [weak self] ok in
-                guard let self, ok else { return }
-                self.health.startHeartRateStreaming { bpm in
-                    DispatchQueue.main.async {
-                        self.currentHeartRateBPM = bpm
-                        self.heartRateSamples.append(bpm)
+            #if DEBUG
+            print("[WorkoutViewModel] 🚀 Starting HealthKit setup for voice mode...")
+            #endif
+            
+            // Check current authorization status first
+            let (readAuth, writeAuth) = health.checkAuthorizationStatus()
+            #if DEBUG
+            print("[WorkoutViewModel] 📊 Current authorization - Read: \(readAuth), Write: \(writeAuth)")
+            #endif
+            
+            // If read authorization is already granted, start streaming directly
+            if readAuth {
+                #if DEBUG
+                print("[WorkoutViewModel] ✅ Read authorization already granted, starting heart rate streaming")
+                #endif
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.health.startHeartRateStreaming { bpm in
+                        DispatchQueue.main.async {
+                            #if DEBUG
+                            print("[WorkoutViewModel] 💓 Received heart rate update: \(Int(bpm)) bpm")
+                            #endif
+                            self.currentHeartRateBPM = bpm
+                            self.heartRateSamples.append(bpm)
+                        }
+                    }
+                }
+            } else {
+                // Request authorization and start streaming
+                health.requestAuthorization { [weak self] ok in
+                    #if DEBUG
+                    print("[WorkoutViewModel] 📞 Authorization callback received (voice mode): \(ok)")
+                    #endif
+                    
+                    guard let self else { return }
+                    
+                    // Check actual status after callback
+                    let (newReadAuth, _) = self.health.checkAuthorizationStatus()
+                    #if DEBUG
+                    print("[WorkoutViewModel] 📊 Authorization after callback - Read: \(newReadAuth)")
+                    #endif
+                    
+                    if newReadAuth {
+                        #if DEBUG
+                        print("[WorkoutViewModel] ✅ HealthKit authorized, starting heart rate streaming")
+                        #endif
+                        
+                        // Small delay to ensure authorization is fully processed
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            self.health.startHeartRateStreaming { bpm in
+                                DispatchQueue.main.async {
+                                    #if DEBUG
+                                    print("[WorkoutViewModel] 💓 Received heart rate update: \(Int(bpm)) bpm")
+                                    #endif
+                                    self.currentHeartRateBPM = bpm
+                                    self.heartRateSamples.append(bpm)
+                                }
+                            }
+                        }
+                    } else {
+                        #if DEBUG
+                        print("[WorkoutViewModel] ❌ HealthKit authorization still denied")
+                        #endif
                     }
                 }
             }
+        } else {
+            #if DEBUG
+            print("[WorkoutViewModel] ⚠️ HealthKit not enabled for voice mode")
+            #endif
         }
     }
     
@@ -346,6 +475,17 @@ final class WorkoutViewModel: ObservableObject {
         let calories = Calculations.calories(met: .moderate, weightKg: weight, durationSeconds: duration)
         let avgHR = heartRateSamples.isEmpty ? nil : (heartRateSamples.reduce(0, +) / Double(heartRateSamples.count))
         let maxHR = heartRateSamples.max()
+        
+        #if DEBUG
+        print("[WorkoutViewModel] 📊 Completing session:")
+        print("[WorkoutViewModel]   - Reps: \(reps)")
+        print("[WorkoutViewModel]   - Duration: \(duration)s")
+        print("[WorkoutViewModel]   - Heart rate samples collected: \(heartRateSamples.count)")
+        print("[WorkoutViewModel]   - Avg HR: \(avgHR != nil ? "\(Int(avgHR!)) bpm" : "nil")")
+        print("[WorkoutViewModel]   - Max HR: \(maxHR != nil ? "\(Int(maxHR!)) bpm" : "nil")")
+        print("[WorkoutViewModel]   - Calories: \(calories)")
+        #endif
+        
         let session = WorkoutSession(
             id: UUID(),
             date: Date(),
@@ -367,7 +507,10 @@ final class WorkoutViewModel: ObservableObject {
 
     func finishWithRecovery(completion: @escaping (WorkoutSession) -> Void) {
         stop() // Stop the timer and workout first
-        guard premiumUnlocked && healthSyncEnabled && health.isHealthDataAvailable, let baseline = currentHeartRateBPM else {
+        guard premiumUnlocked && healthSyncEnabled && health.isHealthDataAvailable else {
+            #if DEBUG
+            print("[WorkoutViewModel] ⚠️ Skipping recovery - HealthKit not enabled")
+            #endif
             let session = completeSession()
             markPlanDayComplete()
             completion(session)
@@ -492,6 +635,11 @@ struct WorkoutView: View {
                 }
                 .padding(8)
                 .glass(cornerRadius: 12)
+                .onAppear {
+                    #if DEBUG
+                    print("[WorkoutView] 💓 Heart rate UI displayed: \(Int(hr)) bpm")
+                    #endif
+                }
             }
 
             ZStack {
@@ -694,16 +842,27 @@ struct WorkoutView: View {
                 
                 // Only save session if there are actual reps
                 if session.reps > 0 {
-                    if vm.isHealthSavingEnabled { HealthKitService.shared.saveWorkout(session: session) }                                                       
+                    // Save to Apple Health if enabled
+                    if vm.isHealthSavingEnabled {
+                        #if DEBUG
+                        print("[WorkoutView] 💾 Saving workout to Apple Health...")
+                        #endif
+                        HealthKitService.shared.saveWorkout(session: session)
+                    }
+                    
+                    // Save to local store
                     var all = SessionStore.load()
                     all.append(session)
                     SessionStore.save(all)
+                    
                     // Notify that sessions have been updated
-                    NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)                                                  
+                    NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)
+                    
                     // Handle notification logic for workout completion
                     NotificationManager.shared.onWorkoutCompleted()
+                    
                     #if DEBUG
-                    print("[WorkoutView] ✅ Session saved")
+                    print("[WorkoutView] ✅ Session saved locally")
                     #endif
                 }
                 

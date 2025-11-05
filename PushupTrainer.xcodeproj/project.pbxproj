@@ -458,6 +458,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PushupTrainer/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "We use Health data (heart rate and workouts) to show live stats and save your sessions to Apple Health.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "We write your workout and active energy to Apple Health when you choose to sync.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Required for voice counting mode to recognize your rep counts.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Required for voice counting mode to recognize your rep counts.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -493,6 +497,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PushupTrainer/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "We use Health data (heart rate and workouts) to show live stats and save your sessions to Apple Health.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "We write your workout and active energy to Apple Health when you choose to sync.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Required for voice counting mode to recognize your rep counts.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Required for voice counting mode to recognize your rep counts.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

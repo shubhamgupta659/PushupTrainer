@@ -26,10 +26,10 @@ struct PushupTrainerApp: App {
         // Generate test data on app launch (DEBUG only)
         #if DEBUG
         // Uncomment the line below to generate test data
-        //TestDataGenerator.generateTestData()
+        // TestDataGenerator.generateTestData()
         
         // Uncomment to clear all data and start fresh
-        //TestDataGenerator.clearTestData()
+        // TestDataGenerator.clearTestData()
         #endif
     }
     

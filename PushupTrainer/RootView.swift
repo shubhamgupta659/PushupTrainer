@@ -67,11 +67,9 @@ struct MainTabView: View {
                 .tabItem { Label("Workout", systemImage: "figure.strengthtraining.traditional") }
                 .tag(1)
 
-            NavigationStack {
-                EditPlanView()
-            }
-            .tabItem { Label("Plan", systemImage: "list.bullet.clipboard") }
-            .tag(2)
+            AwardsView()
+                .tabItem { Label("Awards", systemImage: "trophy.fill") }
+                .tag(2)
 
             CalendarView()
                 .tabItem { Label("Activity", systemImage: "calendar") }

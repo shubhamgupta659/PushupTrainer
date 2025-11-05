@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>NSHealthShareUsageDescription</key>
-	<string>We use Health data (heart rate and workouts) to show live stats and save your sessions to Apple Health.</string>
+	<string>We use your heart rate data to show live stats during workouts and help you track your fitness progress.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>We write your workout and active energy to Apple Health when you choose to sync.</string>
+	<string>We save your workout sessions and active energy to Apple Health so you can track your fitness progress across all your apps.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Required for voice counting mode to recognize your rep counts.</string>
+	<string>We use the microphone for voice-based rep counting during workouts.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Required for voice counting mode to recognize your rep counts.</string>
+	<string>We use speech recognition to count your reps when you say numbers during workouts.</string>
 </dict>
 </plist>

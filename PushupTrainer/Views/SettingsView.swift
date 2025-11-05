@@ -30,6 +30,7 @@ struct SettingsView: View {
     @State private var showResetConfirmation = false
     @State private var showiCloudErrorAlert = false
     @State private var showiCloudUnavailableAlert = false
+    @State private var showHealthPermissionAlert = false
     
     // Device-dependent sizes
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -75,6 +76,23 @@ struct SettingsView: View {
                                 Text(profile?.displayName ?? "Edit Profile")
                                     .font(.headline)
                                 Text("Tap to edit profile and goals")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                    
+                    NavigationLink(destination: EditPlanView()) {
+                        HStack {
+                            Image(systemName: "list.bullet.clipboard")
+                                .font(.title3)
+                                .foregroundStyle(themeManager.accentColor.color)
+                                .frame(width: 48)
+                            VStack(alignment: .leading) {
+                                Text("Workout Plan")
+                                    .font(.headline)
+                                Text("View and edit your workout plan")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -222,20 +240,40 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Premium") {
-                Toggle("Premium Unlocked (placeholder)", isOn: $premiumUnlocked)
-                Text("Voice Mode, AI Coach enhancements, Health/Cloud sync")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
             Section("Health") {
                 Toggle("Apple Health Sync", isOn: Binding(
                     get: { premiumUnlocked && healthSyncEnabled },
-                    set: { newVal in healthSyncEnabled = premiumUnlocked ? newVal : false }
+                    set: { newVal in
+                        if newVal && premiumUnlocked {
+                            // Request HealthKit authorization when enabling
+                            enableHealthSync()
+                        } else {
+                            healthSyncEnabled = false
+                        }
+                    }
                 ))
                 .disabled(!premiumUnlocked)
-                Text(premiumUnlocked ? "Sync heart rate during workouts." : "Premium required to enable Health sync.")
+                
+                if premiumUnlocked && healthSyncEnabled {
+                    if HealthKitService.shared.isHealthDataAvailable {
+                        Text("Live heart rate from Apple Watch will be shown during workouts. Workouts will be saved to Apple Health.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Health data is not available on this device.")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
+                } else {
+                    Text(premiumUnlocked ? "Sync heart rate during workouts and save workouts to Apple Health." : "Premium required to enable Health sync.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Premium") {
+                Toggle("Premium Unlocked (placeholder)", isOn: $premiumUnlocked)
+                Text("Voice Mode, AI Coach enhancements, Health/Cloud sync")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -264,6 +302,19 @@ struct SettingsView: View {
             .onAppear { 
                 profile = ProfileStore.load()
                 notificationManager.checkAuthorizationStatus()
+                
+                // Check if HealthKit permissions were revoked and disable toggle if needed
+                // Note: We don't automatically enable the toggle to respect user's explicit choice
+                if premiumUnlocked && healthSyncEnabled {
+                    let (readAuth, writeAuth) = HealthKitService.shared.checkAuthorizationStatus()
+                    if !readAuth && !writeAuth {
+                        // Permissions were revoked but toggle is on - disable it
+                        healthSyncEnabled = false
+                        #if DEBUG
+                        print("[SettingsView] ⚠️ HealthKit permissions revoked, disabling sync toggle")
+                        #endif
+                    }
+                }
             }
             .alert("Notification Permission Required", isPresented: $showNotificationPermissionAlert) {
                 Button("Open Settings", role: .none) {
@@ -282,6 +333,16 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This will permanently delete all your workout sessions, plans, and profile data. This action cannot be undone.")
+            }
+            .alert("Health Permission Required", isPresented: $showHealthPermissionAlert) {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("HealthKit permissions were previously denied. Please enable Heart Rate (read) and Workout Type (write) in Settings > Privacy & Security > Health > PushupTrainer.")
             }
             .alert("iCloud Sync Unavailable", isPresented: $showiCloudErrorAlert) {
                 Button("OK", role: .cancel) {}
@@ -350,6 +411,56 @@ struct SettingsView: View {
         print("[SettingsView] 🔄 Reloading all widget timelines after accent color change")
         #endif
         #endif
+    }
+    
+    // MARK: - Health Sync Helpers
+    
+    private func enableHealthSync() {
+        guard premiumUnlocked else {
+            healthSyncEnabled = false
+            return
+        }
+        
+        guard HealthKitService.shared.isHealthDataAvailable else {
+            healthSyncEnabled = false
+            return
+        }
+        
+        #if DEBUG
+        print("[SettingsView] 🔐 Requesting HealthKit authorization...")
+        #endif
+        
+        // Request HealthKit authorization
+        HealthKitService.shared.requestAuthorization { granted in
+            DispatchQueue.main.async {
+                // Check actual authorization status, not just the callback result
+                let (readAuth, writeAuth) = HealthKitService.shared.checkAuthorizationStatus()
+                
+                #if DEBUG
+                print("[SettingsView] 📊 Authorization check result - Read: \(readAuth), Write: \(writeAuth)")
+                print("[SettingsView] 📞 Callback returned: \(granted)")
+                #endif
+                
+                // Only enable if we have at least read authorization (for heart rate)
+                // Write authorization is checked separately when saving workouts
+                if readAuth || writeAuth {
+                    self.healthSyncEnabled = true
+                    #if DEBUG
+                    print("[SettingsView] ✅ HealthKit authorization granted, sync enabled")
+                    #endif
+                } else {
+                    self.healthSyncEnabled = false
+                    #if DEBUG
+                    print("[SettingsView] ❌ HealthKit authorization denied - sync disabled")
+                    print("[SettingsView] 📱 User must enable permissions in Settings > Privacy & Security > Health > PushupTrainer")
+                    #endif
+                    // If authorization was denied, show alert to guide user to Settings
+                    if !readAuth && !writeAuth {
+                        self.showHealthPermissionAlert = true
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - iCloud Sync Helpers
