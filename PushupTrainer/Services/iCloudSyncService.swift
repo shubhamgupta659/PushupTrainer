@@ -30,6 +30,7 @@ class iCloudSyncService: ObservableObject {
         static let plan = "icloud_plan"
         static let profile = "icloud_profile"
         static let preferences = "icloud_preferences"
+        static let awards = "icloud_awards"
         static let lastSyncDate = "icloud_last_sync_date"
     }
     
@@ -69,6 +70,7 @@ class iCloudSyncService: ObservableObject {
             try await syncPlan()
             try await syncProfile()
             try await syncPreferences()
+            try await syncAwards()
             
             DispatchQueue.main.async {
                 self.lastSyncDate = Date()
@@ -97,6 +99,7 @@ class iCloudSyncService: ObservableObject {
         try await mergePlan()
         try await mergeProfile()
         try await mergePreferences()
+        try await mergeAwards()
         
         DispatchQueue.main.async {
             self.lastSyncDate = self.ubiquitousStore.object(forKey: iCloudKeys.lastSyncDate) as? Date
@@ -302,6 +305,38 @@ class iCloudSyncService: ObservableObject {
                     UserDefaults.standard.set(value, forKey: key)
                 }
             }
+        }
+    }
+
+    // MARK: - Awards Sync
+
+    private func syncAwards() async throws {
+        let progress = AwardStore.loadProgress()
+        guard let data = try? JSONEncoder().encode(progress) else {
+            throw iCloudSyncError.encodingFailed
+        }
+
+        ubiquitousStore.set(data, forKey: iCloudKeys.awards)
+
+        if !ubiquitousStore.synchronize() {
+            throw iCloudSyncError.syncFailed
+        }
+    }
+
+    private func mergeAwards() async throws {
+        guard let data = ubiquitousStore.data(forKey: iCloudKeys.awards),
+              let cloudProgress = try? JSONDecoder().decode(AwardProgress.self, from: data) else {
+            return
+        }
+
+        var localProgress = AwardStore.loadProgress()
+        let originalProgress = localProgress
+        localProgress.unlockedAwardIds.formUnion(cloudProgress.unlockedAwardIds)
+        localProgress.lastCheckedDate = max(localProgress.lastCheckedDate, cloudProgress.lastCheckedDate)
+
+        // Only save if there are new awards or a more recent timestamp
+        if localProgress.unlockedAwardIds != originalProgress.unlockedAwardIds || localProgress.lastCheckedDate != originalProgress.lastCheckedDate {
+            AwardStore.saveProgress(localProgress)
         }
     }
     

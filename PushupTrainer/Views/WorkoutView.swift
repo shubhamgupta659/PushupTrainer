@@ -59,7 +59,7 @@ final class WorkoutViewModel: ObservableObject {
         if let savedMode = WorkoutMode(rawValue: preferredWorkoutMode) {
             mode = savedMode
         } else {
-            // Fallback to profile or manual
+            // Fallback to profile or tap mode
             let profile = ProfileStore.load()
             mode = profile?.defaultMode ?? .manual
         }
@@ -161,7 +161,7 @@ final class WorkoutViewModel: ObservableObject {
         if let savedMode = WorkoutMode(rawValue: preferredWorkoutMode) {
             mode = savedMode
         } else {
-            // Fallback to profile or manual
+            // Fallback to profile or tap mode
             let profile = ProfileStore.load()
             mode = profile?.defaultMode ?? .manual
         }
@@ -184,7 +184,7 @@ final class WorkoutViewModel: ObservableObject {
             return // Voice mode start will call the rest via completion
         }
         
-        // For manual mode, timer starts on first rep. For other modes, start immediately
+        // For tap mode, timer starts on first rep. For other modes, start immediately
         if mode != .manual {
             startTimer()
         }
@@ -292,7 +292,7 @@ final class WorkoutViewModel: ObservableObject {
                     self.showPermissionAlert = true
                     self.permissionAlertMessage = "Microphone and speech recognition permissions are required for voice mode. Please enable them in Settings."
                     // Still allow workout to proceed but without voice recognition
-                    self.fallbackToManual()
+                    self.fallbackToTapMode()
                 }
             }
         }
@@ -384,13 +384,13 @@ final class WorkoutViewModel: ObservableObject {
         }
     }
     
-    private func fallbackToManual() {
-        // If voice mode fails, fall back to manual mode
+    private func fallbackToTapMode() {
+        // If voice mode fails, fall back to tap mode
         isRunning = true
         startTimer()
         tts.speak("Let's crush this workout!")
         #if DEBUG
-        print("[Workout] Voice mode failed, falling back to manual")
+        print("[Workout] Voice mode failed, falling back to tap mode")
         #endif
     }
 
@@ -452,7 +452,7 @@ final class WorkoutViewModel: ObservableObject {
         timestamps.append(Date())
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         
-        // In manual mode, start timer on first rep
+        // In tap mode, start timer on first rep
         if mode == .manual && reps == 1 && timer == nil {
             startTimer()
         }
@@ -472,7 +472,7 @@ final class WorkoutViewModel: ObservableObject {
         let duration = Int(end.timeIntervalSince(startDate))
         let profile = ProfileStore.load()
         let weight = profile?.weightKg ?? 70
-        let calories = Calculations.calories(met: .moderate, weightKg: weight, durationSeconds: duration)
+        let calories = Calculations.pushupCalories(reps: reps, durationSeconds: duration, weightKg: weight)
         let avgHR = heartRateSamples.isEmpty ? nil : (heartRateSamples.reduce(0, +) / Double(heartRateSamples.count))
         let maxHR = heartRateSamples.max()
         
@@ -498,6 +498,7 @@ final class WorkoutViewModel: ObservableObject {
             notes: "",
             repsTimestamps: timestamps,
             targetRepsAtStart: selectedTargetReps,
+            modeDisplayOverride: nil,
             averageHeartRateBPM: avgHR,
             maxHeartRateBPM: maxHR,
             recoveryHeartRateDropBPM: nil
@@ -909,7 +910,7 @@ struct PlanPreviewSheet: View {
     private var modeSectionView: some View {
         Section("Workout Mode") {
             Picker("Mode", selection: $selectedMode) {
-                Text("Manual").tag(WorkoutMode.manual)
+                Text("Tap").tag(WorkoutMode.manual)
                 Text("Timer").tag(WorkoutMode.timer)
                 Text("Voice").tag(WorkoutMode.voice)
             }

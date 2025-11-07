@@ -150,6 +150,7 @@ enum TestDataGenerator {
                     notes: "",
                     repsTimestamps: timestamps,
                     targetRepsAtStart: targetReps,
+                    modeDisplayOverride: nil,
                     averageHeartRateBPM: Double.random(in: 110...150),
                     maxHeartRateBPM: Double.random(in: 150...180),
                     recoveryHeartRateDropBPM: Double.random(in: 15...35)

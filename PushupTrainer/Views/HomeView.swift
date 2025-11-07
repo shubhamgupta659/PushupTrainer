@@ -732,7 +732,7 @@ struct WeeklyRingView: View {
         let calendar = Calendar.current
         if let onboardingDate = profile?.onboardingDate {
             let onboardingStart = calendar.startOfDay(for: onboardingDate)
-            if day.date < onboardingStart {
+            if day.date < onboardingStart && day.repsText.isEmpty {
                 return .clear
             }
         }
@@ -818,7 +818,13 @@ struct WeeklyRingView: View {
             if let onboardingDate = profile?.onboardingDate {
                 let onboardingStart = calendar.startOfDay(for: onboardingDate)
                 if dayStart < onboardingStart {
-                    status = .none
+                    if dayReps == 0 {
+                        status = .none
+                    } else if ring1 >= 1.0 {
+                        status = .complete
+                    } else {
+                        status = .partial(progress: ring1)
+                    }
                 } else if dayStart > todayStart {
                     // Future date
                     status = .none

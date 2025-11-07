@@ -15,7 +15,7 @@ enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
     
     var label: String {
         switch self {
-        case .manual: return "Manual"
+        case .manual: return "Tap"
         case .timer: return "Timer"
         case .voice: return "Voice"
         }
@@ -56,6 +56,7 @@ struct WorkoutSession: Codable, Identifiable, Equatable {
     // Snapshot of the user's target reps at the moment the workout started
     // Optional for backward compatibility with older saved sessions
     var targetRepsAtStart: Int?
+    var modeDisplayOverride: String?
     // Health stats (optional, premium + HealthKit)
     var averageHeartRateBPM: Double?
     var maxHeartRateBPM: Double?

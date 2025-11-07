@@ -82,7 +82,9 @@ struct SettingsView: View {
                             Spacer()
                         }
                     }
-                    
+                }
+
+                Section("Plan") {
                     NavigationLink(destination: EditPlanView()) {
                         HStack {
                             Image(systemName: "list.bullet.clipboard")
@@ -170,8 +172,7 @@ struct SettingsView: View {
                             HStack {
                                 Text("Reminder Time")
                                 Spacer()
-                                DatePicker("", selection: reminderTime, displayedComponents: .hourAndMinute)
-                                    .labelsHidden()
+                                AccentTimePicker(date: reminderTime, accentColor: themeManager.accentColor.color)
                                     .onChange(of: reminderHour) { _, _ in
                                         scheduleNotifications()
                                     }
@@ -363,6 +364,8 @@ struct SettingsView: View {
         UserDefaults.standard.removeObject(forKey: "userProfile")
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         UserDefaults.standard.set(WorkoutMode.manual.rawValue, forKey: "preferredWorkoutMode")
+        UserDefaults.standard.removeObject(forKey: "awardProgress")
+        AwardStore.saveProgress(AwardProgress())
         notificationManager.cancelAllReminders()
         notificationsEnabled = false
         profile = nil
@@ -486,6 +489,40 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Accent Time Picker Helper
+
+private struct AccentTimePicker: View {
+    @Binding var date: Date
+    var accentColor: Color
+    
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+    
+    var body: some View {
+        DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+            .labelsHidden()
+            .datePickerStyle(.compact)
+            .opacity(0.02)
+            .overlay(alignment: .center) {
+                Text(Self.formatter.string(from: date))
+                    .font(.body)
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(uiColor: .secondarySystemFill))
+                    )
+                    .allowsHitTesting(false)
+            }
+            .background(Color.clear)
     }
 }
 

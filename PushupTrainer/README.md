@@ -18,7 +18,7 @@ Modern, minimalistic push-up trainer with a liquid-glass theme, smooth animation
 - **Liquid-Glass Theme**: System/Light/Dark with frosted cards and subtle strokes
 - **Onboarding**: Collects gender, age, height, weight, target reps, and current max
 - **Home**: Greeting, weekly stats placeholder, quick links, and a floating + to start workouts
-- **Workout**: Manual and timer-style shell; big circular tap target; haptics; TTS encouragements; live heart rate (premium + HealthKit)
+- **Workout**: Tap and timer-style shell; big circular tap target; haptics; TTS encouragements; live heart rate (premium + HealthKit)
 - **Activity**: Day-grouped session list with reps, duration, and kcal
 - **Settings**: Theme switch, basic goal edits, premium toggle placeholder, analytics opt-in
 - **Health (Premium)**: Toggle Health sync; live heart rate during session; session stores avg/max bpm; writes workouts to Apple Health; 60s recovery HR drop
@@ -140,7 +140,7 @@ Privacy principles:
 
 ### UI Tests (Planned)
 - Onboarding: end-to-end flow
-- Workout: manual counting, pause/resume/end, session save
+- Workout: tap counting, pause/resume/end, session save
 - Purchase: StoreKit sandbox lifetime unlock
 
 ### Accessibility
@@ -169,7 +169,7 @@ Privacy principles:
 - Builds and runs on iOS 16+
 - Theme switching (System/Light/Dark) with liquid-glass visuals
 - Onboarding collects and persists user details
-- Manual workout counting works with haptics and TTS encouragement
+- Tap workout counting works with haptics and TTS encouragement
 - Timer-mode shell available (full interval logic can be expanded)
 - Calendar lists completed sessions with reps, time, and calories
 - Settings allows theme and goal edits, premium placeholder, analytics opt-in

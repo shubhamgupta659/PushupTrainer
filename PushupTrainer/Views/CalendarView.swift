@@ -4,15 +4,21 @@
 //
 
 import SwiftUI
+import WidgetKit
 
 struct CalendarView: View {
     let initialDate: Date?
     
+    @EnvironmentObject var themeManager: ThemeManager
+    @AppStorage("premiumUnlocked") private var premiumUnlocked: Bool = false
     @State private var sessions: [WorkoutSession] = SessionStore.load()
     @State private var plan: WorkoutPlan? = PlanStore.load()
     @State private var profile: UserProfile? = ProfileStore.load()
     @State private var selectedDate: Date = Date()
     @State private var showDetailView: Bool = false
+    @State private var showManualLogSheet: Bool = false
+    @State private var manualLogInitialDate: Date = Date()
+    @State private var manualLogDefaultTarget: Int? = nil
     
     init(initialDate: Date? = nil) {
         self.initialDate = initialDate
@@ -89,12 +95,45 @@ struct CalendarView: View {
                     }
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                Button(action: {
+                    manualLogInitialDate = clampManualLogDate(selectedDate)
+                    manualLogDefaultTarget = planTarget(for: manualLogInitialDate)
+                    showManualLogSheet = true
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 56, weight: .semibold))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(themeManager.accentColor.color, Color(uiColor: .systemBackground))
+                        .shadow(color: themeManager.accentColor.color.opacity(0.4), radius: 8, x: 0, y: 6)
+                }
+                .padding(.trailing, 24)
+                .padding(.bottom, 32)
+                .accessibilityLabel("Log workout manually")
+            }
             .sheet(isPresented: $showDetailView) {
                 DayDetailView(date: selectedDate, sessions: sessionsForDate(selectedDate)) {
                     sessions = SessionStore.load()
                     plan = PlanStore.load()
                     showDetailView = false
                 }
+            }
+            .sheet(isPresented: $showManualLogSheet) {
+                ManualLogSheet(
+                    initialDate: manualLogInitialDate,
+                    accentColor: themeManager.accentColor.color,
+                    weightKg: profile?.weightKg ?? 70,
+                    defaultTarget: manualLogDefaultTarget,
+                    isPremium: premiumUnlocked,
+                    earliestDate: earliestAvailableDate(),
+                    onSave: { date, durationMinutes, reps, target in
+                        saveManualSession(date: date, durationMinutes: durationMinutes, reps: reps, targetReps: target)
+                        showManualLogSheet = false
+                    },
+                    onCancel: {
+                        showManualLogSheet = false
+                    }
+                )
             }
         }
     }
@@ -140,6 +179,102 @@ struct CalendarView: View {
         sessions.filter { session in
             calendar.isDate(session.date, inSameDayAs: date)
         }
+    }
+    
+    private func clampManualLogDate(_ date: Date) -> Date {
+        let now = Date()
+        let minOneYear = calendar.date(byAdding: .year, value: -1, to: now) ?? now
+        if !premiumUnlocked {
+            return min(max(date, minOneYear), now)
+        }
+        let earliestAvailable = earliestAvailableDate() ?? minOneYear
+        return min(max(date, earliestAvailable), now)
+    }
+    
+    private func saveManualSession(date: Date, durationMinutes: Int, reps: Int, targetReps: Int) {
+        guard reps > 0, durationMinutes > 0 else { return }
+        let durationSeconds = durationMinutes * 60
+        let weightKg = ProfileStore.load()?.weightKg ?? 70
+        let calories = Calculations.pushupCalories(reps: reps, durationSeconds: durationSeconds, weightKg: weightKg)
+        let dayStart = calendar.startOfDay(for: date)
+        let defaultEnd = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: date) ?? dayStart.addingTimeInterval(18 * 3600)
+        let now = Date()
+        let clampedEnd = min(defaultEnd, now)
+        let startTime = max(dayStart, clampedEnd.addingTimeInterval(-TimeInterval(durationSeconds)))
+        let target = targetReps
+        let session = WorkoutSession(
+            id: UUID(),
+            date: clampedEnd,
+            startTime: startTime,
+            endTime: clampedEnd,
+            reps: reps,
+            durationSeconds: durationSeconds,
+            mode: .manual,
+            caloriesBurned: calories,
+            notes: "Logged manually",
+            repsTimestamps: [],
+            targetRepsAtStart: target,
+            modeDisplayOverride: "Manual",
+            averageHeartRateBPM: nil,
+            maxHeartRateBPM: nil,
+            recoveryHeartRateDropBPM: nil
+        )
+        var all = SessionStore.load()
+        all.append(session)
+        all.sort { $0.startTime < $1.startTime }
+        SessionStore.save(all)
+        markPlanDayCompleteIfNeeded(session: session, overrideTarget: targetReps)
+        NotificationManager.shared.onWorkoutCompleted()
+        NotificationCenter.default.post(name: NSNotification.Name("SessionsUpdated"), object: nil)
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
+        sessions = SessionStore.load()
+        plan = PlanStore.load()
+        profile = ProfileStore.load()
+    }
+    
+    private func earliestAvailableDate() -> Date? {
+        var candidates: [Date] = []
+        if let sessionMin = sessions.map({ $0.date }).min() {
+            candidates.append(sessionMin)
+        }
+        if let onboarding = profile?.onboardingDate {
+            candidates.append(onboarding)
+        }
+        if let planStart = plan?.startDate {
+            candidates.append(planStart)
+        }
+        guard !candidates.isEmpty else { return nil }
+        return candidates.min()
+    }
+    
+    private func planTarget(for date: Date) -> Int? {
+        guard let plan = PlanStore.load() else { return nil }
+        let dayStart = calendar.startOfDay(for: date)
+        let planStart = calendar.startOfDay(for: plan.startDate)
+        guard let diff = calendar.dateComponents([.day], from: planStart, to: dayStart).day, diff >= 0 else {
+            return nil
+        }
+        let dayNumber = diff + 1
+        if let planDay = plan.days.first(where: { $0.dayNumber == dayNumber }) {
+            return planDay.targetReps
+        }
+        return plan.targetReps
+    }
+    
+    private func markPlanDayCompleteIfNeeded(session: WorkoutSession, overrideTarget: Int) {
+        guard var plan = PlanStore.load() else { return }
+        let dayStart = calendar.startOfDay(for: session.date)
+        let planStart = calendar.startOfDay(for: plan.startDate)
+        guard let diff = calendar.dateComponents([.day], from: planStart, to: dayStart).day else { return }
+        let dayNumber = diff + 1
+        guard let index = plan.days.firstIndex(where: { $0.dayNumber == dayNumber }) else { return }
+        let target = overrideTarget
+        guard session.reps >= target else { return }
+        plan.days[index].isCompleted = true
+        plan.days[index].completedDate = session.endTime
+        PlanStore.save(plan)
     }
 }
 
@@ -232,8 +367,8 @@ struct MonthCalendarView: View {
         if let onboardingDate = profile?.onboardingDate {
             let onboardingStart = calendar.startOfDay(for: onboardingDate)
             let dayStart = calendar.startOfDay(for: date)
-            if dayStart < onboardingStart {
-                return .none // Don't show any status for days before onboarding
+            if dayStart < onboardingStart && daySessions.isEmpty {
+                return .none // Only hide if no sessions recorded before onboarding
             }
         }
         
@@ -433,6 +568,173 @@ struct DayDetailView: View {
     }
 }
 
+// MARK: - Manual Log Sheet
+
+private struct ManualLogSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let minDate: Date
+    let maxDate: Date
+    let accentColor: Color
+    let weightKg: Double
+    let defaultTarget: Int?
+    let isPremium: Bool
+    let earliestDate: Date?
+    let oneYearAgo: Date
+    let onSave: (Date, Int, Int, Int) -> Void
+    let onCancel: () -> Void
+    
+    @State private var selectedDate: Date
+    @State private var durationMinutes: Int = 1
+    @State private var reps: Int = 20
+    @State private var targetReps: Int
+    @State private var showValidationAlert: Bool = false
+    @State private var showDateWarning: Bool = false
+    
+    init(initialDate: Date, accentColor: Color, weightKg: Double, defaultTarget: Int?, isPremium: Bool, earliestDate: Date?, onSave: @escaping (Date, Int, Int, Int) -> Void, onCancel: @escaping () -> Void) {
+        let now = Date()
+        let calendar = Calendar.current
+        let defaultMin = calendar.date(byAdding: .year, value: -1, to: now) ?? now
+        let premiumMin = earliestDate ?? defaultMin
+        let minDate = isPremium ? min(defaultMin, premiumMin) : defaultMin
+        let oneYearAgo = defaultMin
+        let clampedInitial = max(min(initialDate, now), minDate)
+        self._selectedDate = State(initialValue: clampedInitial)
+        self.minDate = minDate
+        self.maxDate = now
+        self.accentColor = accentColor
+        self.weightKg = weightKg
+        self._targetReps = State(initialValue: max(defaultTarget ?? 20, 1))
+        self.onSave = onSave
+        self.onCancel = onCancel
+        self.defaultTarget = defaultTarget
+        self.isPremium = isPremium
+        self.earliestDate = earliestDate
+        self.oneYearAgo = oneYearAgo
+        self._showDateWarning = State(initialValue: isPremium && clampedInitial < oneYearAgo)
+    }
+    
+    private var estimatedCalories: Double {
+        Calculations.pushupCalories(reps: reps, durationSeconds: durationMinutes * 60, weightKg: weightKg)
+    }
+    
+    private var canSave: Bool {
+        reps > 0 && durationMinutes > 0 && targetReps > 0
+    }
+    
+    private var dateWarningText: String {
+        "Workouts earlier than one year stay in iCloud after sync. Recent history remains available on-device."
+    }
+    
+    private func validateDateSelection(_ date: Date) {
+        showDateWarning = isPremium && date < oneYearAgo
+    }
+    
+    private func updateSuggestedTarget(for date: Date) {
+        guard let plan = PlanStore.load() else { return }
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: date)
+        let planStart = calendar.startOfDay(for: plan.startDate)
+        guard let diff = calendar.dateComponents([.day], from: planStart, to: dayStart).day else { return }
+        let dayNumber = diff + 1
+        if let planDay = plan.days.first(where: { $0.dayNumber == dayNumber }) {
+            targetReps = max(planDay.targetReps, 1)
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Workout Date") {
+                    DatePicker("Date", selection: $selectedDate, in: minDate...maxDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .tint(accentColor)
+                        .onChange(of: selectedDate) { _, newValue in
+                            validateDateSelection(newValue)
+                            updateSuggestedTarget(for: newValue)
+                        }
+                    if showDateWarning {
+                        Text(dateWarningText)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                
+                Section("Duration") {
+                    Stepper(value: $durationMinutes, in: 1...240, step: 1) {
+                        Text("\(durationMinutes) minute\(durationMinutes == 1 ? "" : "s")")
+                    }
+                }
+                
+                Section("Repetitions") {
+                    Stepper(value: $reps, in: 1...2000, step: 1) {
+                        Text("\(reps) reps")
+                    }
+                }
+                
+                Section("Target Reps") {
+                    Stepper(value: $targetReps, in: 1...4000, step: 1) {
+                        Text("\(targetReps) target reps")
+                    }
+                    if let defaultTarget {
+                        Text("Plan target for this day: \(defaultTarget) reps")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                Section("Summary") {
+                    HStack {
+                        Label("Calories", systemImage: "flame.fill")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(String(format: "%.0f kcal", estimatedCalories))
+                            .font(.headline)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Estimated calories")
+                    .accessibilityValue(String(format: "%.0f kilocalories", estimatedCalories))
+                    if isPremium {
+                        Text("Older workouts will be archived to iCloud after your next backup. Only the latest year stays on-device.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Log Workout")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        guard canSave else {
+                            showValidationAlert = true
+                            return
+                        }
+                        showDateWarning = false
+                        onSave(selectedDate, durationMinutes, reps, targetReps)
+                        dismiss()
+                    }
+                    .disabled(!canSave)
+                }
+            }
+            .alert("Invalid Entry", isPresented: $showValidationAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Please make sure duration and repetitions are greater than zero.")
+            }
+            .onAppear {
+                validateDateSelection(selectedDate)
+                updateSuggestedTarget(for: selectedDate)
+            }
+        }
+    }
+}
+
 struct ActivityCard: View {
     let session: WorkoutSession
     @State private var showDeleteConfirm: Bool = false
@@ -476,7 +778,8 @@ struct ActivityCard: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
-                    Text("Mode: \(session.mode.rawValue.capitalized)")
+                    let displayMode = session.modeDisplayOverride ?? (session.notes == "Logged manually" ? "Manual" : session.mode.displayName)
+                    Text("Mode: \(displayMode)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

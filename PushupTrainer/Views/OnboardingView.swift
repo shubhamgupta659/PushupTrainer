@@ -144,13 +144,13 @@ struct OnboardingView: View {
                                     }
                                 }) {
                                     HStack(spacing: 12) {
-                                        Image(systemName: mode == .manual ? "hand.tap.fill" : mode == .timer ? "timer" : "mic.fill")
+                                        Image(systemName: mode.iconName)
                                             .font(.title3)
                                             .frame(width: 28)
                                             .foregroundStyle(workoutMode == mode ? themeManager.accentColor.color : .secondary)
                                         
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(mode.displayName)
+                                            Text(mode == .manual ? "Tap" : mode.displayName)
                                                 .font(.subheadline.bold())
                                                 .foregroundStyle(workoutMode == mode ? themeManager.accentColor.color : .primary)
                                             

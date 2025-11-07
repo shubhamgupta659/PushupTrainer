@@ -148,7 +148,8 @@ struct iCloudRestoreView: View {
         let store = NSUbiquitousKeyValueStore.default
         let hasData = store.object(forKey: "icloud_profile") != nil ||
                       store.object(forKey: "icloud_sessions") != nil ||
-                      store.object(forKey: "icloud_plan") != nil
+                      store.object(forKey: "icloud_plan") != nil ||
+                      store.object(forKey: "icloud_awards") != nil
         
         #if DEBUG
         print("[iCloudRestoreView] Has iCloud data: \(hasData)")

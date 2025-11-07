@@ -191,17 +191,18 @@ struct Provider: TimelineProvider {
                 id: UUID(),
                 date: date,
                 startTime: date,
-                endTime: date.addingTimeInterval(300),
-                reps: Int.random(in: 30...70),
-                durationSeconds: 300,
+                endTime: date.addingTimeInterval(600),
+                reps: Int.random(in: 20...60),
+                durationSeconds: 600,
                 mode: .manual,
-                caloriesBurned: 25,
-                notes: "",
+                caloriesBurned: Double.random(in: 60...120),
+                notes: "Widget sample",
                 repsTimestamps: [],
-                targetRepsAtStart: 50,
-                averageHeartRateBPM: nil,
-                maxHeartRateBPM: nil,
-                recoveryHeartRateDropBPM: nil
+                targetRepsAtStart: 40,
+                modeDisplayOverride: nil,
+                averageHeartRateBPM: Double.random(in: 100...140),
+                maxHeartRateBPM: Double.random(in: 120...170),
+                recoveryHeartRateDropBPM: Double.random(in: 5...12)
             ))
         }
         return sessions
